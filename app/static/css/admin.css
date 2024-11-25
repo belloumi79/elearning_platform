@@ -1,0 +1,274 @@
+/* Admin Dashboard Styles */
+:root {
+    --primary-color: #4a90e2;
+    --secondary-color: #f5f6fa;
+    --text-color: #2d3436;
+    --danger-color: #e74c3c;
+    --success-color: #2ecc71;
+}
+
+body {
+    font-family: 'Cairo', sans-serif;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    text-align: right;
+}
+
+/* Navbar Styles */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    color: var(--primary-color) !important;
+    margin-left: 1rem;
+}
+
+/* RTL Specific Styles */
+.navbar .navbar-nav {
+    padding-right: 0;
+}
+
+.navbar-nav .nav-link {
+    padding-right: 1rem !important;
+    padding-left: 1rem !important;
+}
+
+/* Card Styles */
+.card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    background-color: white;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    font-weight: 600;
+}
+
+.card-title {
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+/* Table Styles */
+.table {
+    background-color: white;
+    border-radius: 8px;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Stats Cards */
+.card .card-text {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 0;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .card .card-text {
+        font-size: 1.5rem;
+    }
+    
+    .navbar-brand {
+        margin-right: 0;
+    }
+}
+
+/* Loading States */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Error States */
+.text-error {
+    color: var(--danger-color);
+}
+
+/* Success States */
+.text-success {
+    color: var(--success-color);
+}
+
+/* Custom Scrollbar for Tables */
+.table-responsive {
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) var(--secondary-color);
+}
+
+.table-responsive::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: var(--secondary-color);
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color);
+    border-radius: 4px;
+}
+
+/* RTL specific padding adjustments */
+.me-auto {
+    margin-right: 0 !important;
+    margin-left: auto !important;
+}
+
+.ms-auto {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+.me-2 {
+    margin-right: 0 !important;
+    margin-left: 0.5rem !important;
+}
+
+.ms-2 {
+    margin-left: 0 !important;
+    margin-right: 0.5rem !important;
+}
+
+/* Arabic Typography Enhancements */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.navbar-brand {
+    font-size: 1.4rem;
+}
+
+.card-title {
+    line-height: 1.4;
+}
+
+/* Button Styles */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #357abd;
+    border-color: #357abd;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+/* Form Styles */
+.form-control {
+    border-radius: 4px;
+    border: 1px solid #dcdde1;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(74, 144, 226, 0.25);
+}
+
+/* Alert Styles */
+.alert {
+    border-radius: 4px;
+    border: none;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* Modal Styles */
+.modal-content {
+    border-radius: 8px;
+    border: none;
+}
+
+.modal-header {
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.modal-footer {
+    border-top: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Login Page Styles */
+.login-container {
+    max-width: 400px;
+    margin: 100px auto;
+}
+
+.login-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.login-title {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: var(--primary-color);
+}
+
+/* DataTables Customization */
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: var(--primary-color) !important;
+    color: white !important;
+    border: none;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #357abd !important;
+    color: white !important;
+    border: none;
+}
+
+/* Utility Classes */
+.text-primary {
+    color: var(--primary-color) !important;
+}
+
+.bg-light {
+    background-color: var(--secondary-color) !important;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .table-responsive {
+        border-radius: 8px;
+    }
+}

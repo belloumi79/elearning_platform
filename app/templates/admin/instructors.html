@@ -1,0 +1,239 @@
+{% extends "admin/base.html" %}
+
+{% block title %}إدارة المدرسين{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">إدارة المدرسين</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addInstructorModal">
+                <i class="fas fa-plus"></i> إضافة مدرس جديد
+            </button>
+        </div>
+    </div>
+
+    <!-- Instructors Table -->
+    <div class="table-responsive">
+        <table class="table table-striped table-hover" id="instructorsTable">
+            <thead>
+                <tr>
+                    <th>الاسم</th>
+                    <th>البريد الإلكتروني</th>
+                    <th>رقم الهاتف</th>
+                    <th>التخصصات</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Filled dynamically -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Instructor Modal -->
+<div class="modal fade" id="addInstructorModal" tabindex="-1" aria-labelledby="addInstructorModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addInstructorModalLabel">إضافة مدرس جديد</h5>
+                <button type="button" class="btn-close ms-0 me-2" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addInstructorForm">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">الاسم</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">البريد الإلكتروني</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">رقم الهاتف</label>
+                        <input type="tel" class="form-control" id="phone" name="phone" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="specialties" class="form-label">التخصصات</label>
+                        <input type="text" class="form-control" id="specialties" name="specialties" 
+                               placeholder="أدخل التخصصات مفصولة بفواصل">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">كلمة المرور</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-primary" form="addInstructorForm">حفظ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteInstructorModal" tabindex="-1" aria-labelledby="deleteInstructorModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteInstructorModalLabel">تأكيد الحذف</h5>
+                <button type="button" class="btn-close ms-0 me-2" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                هل أنت متأكد من حذف هذا المدرس؟
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-danger" id="confirmDelete">حذف</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadInstructors() {
+    $.ajax({
+        url: '/admin/api/instructors',
+        method: 'GET',
+        success: function(data) {
+            const table = $('#instructorsTable').DataTable();
+            table.clear();
+            data.forEach(instructor => {
+                table.row.add([
+                    instructor.name,
+                    instructor.email,
+                    instructor.phone || '-',
+                    instructor.specialties?.join(', ') || '-',
+                    instructor.active ? 'نشط' : 'غير نشط',
+                    `<button class="btn btn-sm btn-danger delete-instructor" data-email="${instructor.email}">
+                        <i class="fas fa-trash"></i> حذف
+                    </button>`
+                ]);
+            });
+            table.draw();
+        },
+        error: function(xhr) {
+            showAlert('danger', xhr.responseJSON?.error || 'حدث خطأ أثناء تحميل بيانات المدرسين');
+        }
+    });
+}
+
+$(document).ready(function() {
+    // Initialize DataTable with Arabic language
+    const table = $('#instructorsTable').DataTable({
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.10.24/i18n/ar.json'
+        },
+        order: [[0, 'asc']],
+        responsive: true
+    });
+
+    // Add Instructor Form Submit
+    $('#addInstructorForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        // Validate form
+        const name = $('#name').val().trim();
+        const email = $('#email').val().trim();
+        const phone = $('#phone').val().trim();
+        const password = $('#password').val();
+        
+        if (!name || !email || !phone || !password) {
+            showAlert('danger', 'جميع الحقول مطلوبة');
+            return;
+        }
+
+        const formData = {
+            name: name,
+            email: email,
+            phone: phone,
+            specialties: $('#specialties').val().split(',').filter(s => s.trim()).map(s => s.trim()),
+            password: password
+        };
+
+        // Disable submit button
+        const submitBtn = $('button[type="submit"]', this);
+        submitBtn.prop('disabled', true);
+
+        // Log the request data for debugging
+        console.log('Sending request:', {
+            url: '/admin/api/instructors',
+            method: 'POST',
+            contentType: 'application/json',
+            data: formData
+        });
+
+        fetch('/admin/api/instructors', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData),
+            credentials: 'include'
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json().then(data => ({status: response.status, data}));
+        })
+        .then(({status, data}) => {
+            console.log('Response data:', data);
+            if (status === 201) {
+                $('#addInstructorModal').modal('hide');
+                showAlert('success', 'تم إضافة المدرس بنجاح');
+                loadInstructors();
+                $('#addInstructorForm')[0].reset();
+            } else {
+                throw new Error(data.error || 'حدث خطأ أثناء إضافة المدرس');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('danger', error.message);
+        })
+        .finally(() => {
+            submitBtn.prop('disabled', false);
+        });
+    });
+
+    // Delete Instructor
+    let emailToDelete = null;
+
+    $(document).on('click', '.delete-instructor', function() {
+        emailToDelete = $(this).data('email');
+        $('#deleteInstructorModal').modal('show');
+    });
+
+    $('#confirmDelete').on('click', function() {
+        if (!emailToDelete) return;
+
+        const btn = $(this);
+        btn.prop('disabled', true);
+
+        $.ajax({
+            url: `/admin/api/instructors/${emailToDelete}`,
+            method: 'DELETE',
+            success: function() {
+                $('#deleteInstructorModal').modal('hide');
+                showAlert('success', 'تم حذف المدرس بنجاح');
+                loadInstructors();
+            },
+            error: function(xhr) {
+                showAlert('danger', xhr.responseJSON?.error || 'حدث خطأ أثناء حذف المدرس');
+            },
+            complete: function() {
+                btn.prop('disabled', false);
+                emailToDelete = null;
+            }
+        });
+    });
+
+    // Initial load
+    loadInstructors();
+});
+</script>
+{% endblock %}
