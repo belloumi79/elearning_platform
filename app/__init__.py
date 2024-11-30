@@ -61,8 +61,8 @@ def create_app(config_name=None):
         try:
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred, {
-                'projectId': os.getenv('FIREBASE_PROJECT_ID'),
-                'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET')
+                'projectId': os.getenv('FIREBASE_PROJECT_ID', 'iqrawartaki-af01c'),
+                'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET', 'iqrawartaki-af01c.appspot.com')
             })
             app.logger.info("Firebase Admin SDK initialized successfully")
         except Exception as e:
@@ -79,4 +79,3 @@ def create_app(config_name=None):
     app.register_blueprint(courses_bp, url_prefix='/courses')
     
     return app
-
