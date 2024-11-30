@@ -43,7 +43,7 @@ def create_app(config_name=None):
     # Configure CORS
     CORS(app, resources={
         r"/*": {
-            "origins": ["http://localhost:5000"],
+            "origins": ["http://localhost:5000", "https://belloumi79.pythonanywhere.com"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "expose_headers": ["Content-Type"],
@@ -79,3 +79,4 @@ def create_app(config_name=None):
     app.register_blueprint(courses_bp, url_prefix='/courses')
     
     return app
+
