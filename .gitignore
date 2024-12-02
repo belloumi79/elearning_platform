@@ -35,9 +35,6 @@ ENV/
 .pydevproject
 .settings/
 
-# Firebase
-config/serviceAccountKey.json
-
 # Logs
 *.log
 logs/
@@ -105,3 +102,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Firebase / Google Cloud
+serviceAccountKey.json
+**/serviceAccountKey.json
+config/serviceAccountKey.json
+*.key.json
+credentials.json
