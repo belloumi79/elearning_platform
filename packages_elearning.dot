@@ -1,0 +1,18 @@
+digraph "packages_elearning" {
+size="20,20"
+rankdir=LR
+charset="utf-8"
+"app" [color="black", label=<app>, shape="box", style="solid"];
+"app.database" [color="black", label=<database>, shape="box", style="solid"];
+"app.database.firestore_db" [color="black", label=<firestore_db>, shape="box", style="solid"];
+"app.models" [color="black", label=<models>, shape="box", style="solid"];
+"app.models.course" [color="black", label=<course>, shape="box", style="solid"];
+"app.models.instructor" [color="black", label=<instructor>, shape="box", style="solid"];
+"app.models.student" [color="black", label=<student>, shape="box", style="solid"];
+"app.models.user" [color="black", label=<user>, shape="box", style="solid"];
+"app.database" -> "app.database.firestore_db" [arrowhead="open", arrowtail="none"];
+"app.models" -> "app.models.course" [arrowhead="open", arrowtail="none"];
+"app.models" -> "app.models.instructor" [arrowhead="open", arrowtail="none"];
+"app.models" -> "app.models.student" [arrowhead="open", arrowtail="none"];
+"app.models" -> "app.models.user" [arrowhead="open", arrowtail="none"];
+}

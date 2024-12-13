@@ -1,0 +1,12 @@
+digraph "classes_elearning" {
+size="10,10"
+rankdir=LR
+ranksep=0.2
+nodesep=0.2
+fontsize=8
+charset="utf-8"
+"app.models.course.Course" [color="black", fontcolor="black", label="Course", shape="record", style="solid"];
+"app.models.instructor.Instructor" [color="black", fontcolor="black", label="Instructor", shape="record", style="solid"];
+"app.models.student.Student" [color="black", fontcolor="black", label="Student", shape="record", style="solid"];
+"app.models.user.User" [color="black", fontcolor="black", label="User", shape="record", style="solid"];
+}

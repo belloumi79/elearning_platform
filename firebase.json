@@ -2,5 +2,13 @@
   "functions": {
     "source": "functions",
     "runtime": "python311"
+  },
+  "hosting": {
+    "public": "/home/user/elearning_platform",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
   }
 }

@@ -7,6 +7,7 @@ import secrets
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials
+from flask import redirect, url_for
 
 def create_app(config_name=None):
     # Initialize Flask app
@@ -77,5 +78,14 @@ def create_app(config_name=None):
     app.register_blueprint(admin_bp)  
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp, url_prefix='/courses')
+    
+    @app.route('/')
+    def index():
+        return redirect(url_for('auth.admin_login'))
+    
+    @app.after_request
+    def add_security_headers(response):
+        response.headers['X-Frame-Options'] = 'ALLOWALL'
+        return response
     
     return app
