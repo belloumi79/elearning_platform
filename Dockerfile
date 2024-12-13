@@ -7,6 +7,6 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-COPY config /app/config
+COPY config/serviceAccountKey.json /app/config/serviceAccountKey.json
 
 CMD ["gunicorn", "run:app"]
