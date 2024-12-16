@@ -187,14 +187,14 @@ def get_all_courses_public():
     Raises:
         500: If there's an error retrieving courses
     """
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
     if request.method == 'OPTIONS':
-        response = make_response()
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
         return response
     try:
         courses = courses_service.get_all_courses()
-        return jsonify(courses)
+        return jsonify(courses), 200, response.headers
     except Exception as e:
         return jsonify({'error': str(e)}), 500
