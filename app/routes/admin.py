@@ -1,5 +1,4 @@
-"""
-Admin routes module for the e-learning platform."""
+"""Admin routes module for the e-learning platform."""
 
 from flask import Blueprint, jsonify, request, render_template, session
 from app.middleware.auth import require_admin
@@ -20,8 +19,18 @@ from app.services.admin_service import (
 )
 import logging
 from google.cloud import firestore
+import google.auth.credentials
 from google.cloud.firestore import transactional
+# Specify the path to your service account key file
+SERVICE_ACCOUNT_KEY_FILE = "config/serviceAccountKey.json"  # Replace with your actual path
 
+# Load credentials explicitly
+try:
+    credentials = google.auth.credentials.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_KEY_FILE
+    )
+except Exception as e:
+    print(f"Error loading credentials: {e}")
 logger = logging.getLogger(__name__)
 db = firestore.Client()
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
