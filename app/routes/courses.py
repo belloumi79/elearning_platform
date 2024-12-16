@@ -9,6 +9,7 @@ Routes:
     - /admin/api/courses: Course CRUD operations
     - /admin/api/courses/<course_id>: Individual course operations
     - /admin/api/instructors: Instructor listing
+    - /api/courses: Public endpoint for fetching all courses
 """
 
 from flask import Blueprint, jsonify, request, render_template
@@ -173,5 +174,21 @@ def get_instructors():
     try:
         instructors = courses_service.get_all_instructors()
         return jsonify(instructors)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@courses_bp.route('/api/courses', methods=['GET'])
+def get_all_courses_public():
+    """Get all courses in the system without authentication.
+    
+    Returns:
+        tuple: JSON response with list of courses and HTTP status code
+        
+    Raises:
+        500: If there's an error retrieving courses
+    """
+    try:
+        courses = courses_service.get_all_courses()
+        return jsonify(courses)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
