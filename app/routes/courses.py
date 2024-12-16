@@ -12,7 +12,7 @@ Routes:
     - /api/courses: Public endpoint for fetching all courses
 """
 
-from flask import Blueprint, jsonify, request, render_template
+from flask import Blueprint, jsonify, request, render_template, make_response
 from app.middleware.auth import require_admin
 from app.services.courses_service import CoursesService
 
@@ -177,7 +177,7 @@ def get_instructors():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@courses_bp.route('/api/courses', methods=['GET'])
+@courses_bp.route('/api/courses', methods=['GET', 'OPTIONS'])
 def get_all_courses_public():
     """Get all courses in the system without authentication.
     
@@ -187,6 +187,12 @@ def get_all_courses_public():
     Raises:
         500: If there's an error retrieving courses
     """
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response
     try:
         courses = courses_service.get_all_courses()
         return jsonify(courses)
