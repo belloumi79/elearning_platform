@@ -43,7 +43,14 @@ def create_app(config_name=None):
     
     # Configure CORS
     CORS(app, resources={
-        r"/*": {
+        r"/api/*": {
+            "origins": ["http://localhost:5000", "https://belloumi79.pythonanywhere.com"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": True
+        },
+        r"/courses/api/*": {
             "origins": ["http://localhost:5000", "https://belloumi79.pythonanywhere.com"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
