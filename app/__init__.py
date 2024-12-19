@@ -67,7 +67,7 @@ def create_app(config_name=None):
     cred_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'serviceAccountKey.json')
     if not firebase_admin._apps:
         try:
-            cred = credentials.Certificate(cred_path)
+            cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred, {
                 'projectId': os.getenv('FIREBASE_PROJECT_ID', 'iqrawartaki-af01c'),
                 'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET', 'iqrawartaki-af01c.appspot.com')
