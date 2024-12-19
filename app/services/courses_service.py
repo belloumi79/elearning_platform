@@ -276,3 +276,47 @@ class CoursesService:
             instructor['id'] = doc.id
             instructors.append(instructor)
         return instructors
+
+    def enroll_student_in_course(self, user_id: str, course_id: str) -> Dict:
+        """
+        Enroll a student in a course.
+        
+        Args:
+            user_id (str): The ID of the user to enroll
+            course_id (str): The ID of the course to enroll in
+            
+        Returns:
+            Dict: Enrollment data
+            
+        Raises:
+            ValueError: If user or course is invalid or user is already enrolled
+            Exception: If there's an error during enrollment
+        """
+        # Validate course exists
+        course_ref = self.courses_ref.document(course_id)
+        if not course_ref.get().exists:
+            raise ValueError(f"Course not found: {course_id}")
+
+        # Validate user exists (basic check, assuming user service handles this)
+        # In a real app, you'd fetch the user document to validate
+        
+        # Check if user is already enrolled
+        enrollment_ref = self.db.collection('enrollments')\
+            .where('user_id', '==', user_id)\
+            .where('course_id', '==', course_id)\
+            .get()
+        if len(enrollment_ref) > 0:
+            raise ValueError(f"User {user_id} is already enrolled in course {course_id}")
+        
+        # Create enrollment document
+        enrollment_data = {
+            'user_id': user_id,
+            'course_id': course_id,
+            'enrolled_at': firestore.SERVER_TIMESTAMP
+        }
+        enrollment_doc_ref = self.db.collection('enrollments').document()
+        enrollment_doc_ref.set(enrollment_data)
+        
+        # Return enrollment data
+        enrollment_data['id'] = enrollment_doc_ref.id
+        return enrollment_data

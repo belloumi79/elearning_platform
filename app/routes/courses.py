@@ -46,6 +46,36 @@ def get_courses():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@courses_bp.route('/api/courses/<course_id>/enroll', methods=['POST'])
+@require_admin
+def enroll_student(course_id):
+    """Enroll a student in a course.
+    
+    Expected JSON payload:
+    {
+        "user_id": str
+    }
+    
+    Returns:
+        tuple: JSON response with enrollment data and HTTP status code
+        
+    Raises:
+        400: If the request data is invalid
+        404: If the course is not found
+        500: If there's an error during enrollment
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Missing user_id'}), 400
+        enrollment = courses_service.enroll_student_in_course(user_id, course_id)
+        return jsonify(enrollment), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @courses_bp.route('/admin/api/courses', methods=['POST'])
 @require_admin
 def create_course():
