@@ -13,6 +13,7 @@ Routes:
 """
 
 from flask import Blueprint, jsonify, request, render_template, make_response
+from flask_login import current_user
 from app.middleware.auth import require_admin
 from app.services.courses_service import CoursesService
 
@@ -43,6 +44,37 @@ def get_courses():
     try:
         courses = courses_service.get_all_courses()
         return jsonify(courses)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@courses_bp.route('/api/user/enroll/', methods=['POST'])
+def enroll_in_course():
+    """Allows an authenticated user to enroll in a course.
+
+    Expects a JSON payload with the `course_id`.
+
+    Returns:
+        A JSON response indicating success or failure, along with relevant data or error messages.
+    """
+    try:
+        data = request.get_json()
+        course_id = data.get('course_id')
+
+        if not course_id:
+            return jsonify({'error': 'Missing course_id'}), 400
+
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required'}), 401
+
+        user_id = current_user.id
+
+        enrollment_result = courses_service.enroll_user_in_course(user_id, course_id)
+
+        if enrollment_result['success']:
+            return jsonify({'message': 'Successfully enrolled in course'}), 200
+        else:
+            return jsonify({'error': enrollment_result['message']}), enrollment_result['status_code']
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

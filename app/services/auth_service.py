@@ -25,33 +25,34 @@ db = firestore.client()
 
 def verify_admin_token(id_token):
     try:
-        logger.info("Starting token verification process...")        
+        logger.info("Starting token verification process...")
         decoded_token = auth.verify_id_token(id_token, check_revoked=True)
-        logger.info(f"Token verified successfully. Claims: {decoded_token.get('claims', {})} ")
+        logger.info(f"Token verified successfully. Claims: {decoded_token.get('claims', {})}")
 
         uid = decoded_token['uid']
-        user = auth.get_user(uid)
-        logger.info(f"Retrieved user data - Email: {user.email}, UID: {uid}")
+        
+        # Check if user is admin before adding to 'users' collection
+        is_admin = False
+        try:
+            admin_ref = db.collection('admins').document(uid)
+            admin_doc = admin_ref.get()
+            is_admin = admin_doc.exists
+        except Exception as e:
+            logger.error(f"Error checking admin status in Firestore: {str(e)}")
 
-        # Check if the user already exists in the users collection
-        user_ref = db.collection('users').document(uid)
-        user_doc = user_ref.get()
-
-        if not user_doc.exists:
-            # Add the user to the users collection
-            user_data = {
-                'uid': uid,
-                'email': user.email,
-                'created_at': datetime.utcnow()
-            }
+        # Add user to 'users' collection if not admin
+        if not is_admin:
             try:
-                user_ref.set(user_data)
-                logger.info(f"User {uid} added to the users collection")
+                user_ref = db.collection('users').document(uid)
+                user_data = {
+                    'uid': uid,
+                    'email': decoded_token['email'],
+                    'created_at': datetime.utcnow()
+                }
+                user_ref.set(user_data, merge=True)
+                logger.info(f"User {uid} added/updated in Firestore")
             except Exception as e:
-                logger.error(f"Error adding user to Firestore: {str(e)}")
-                # Consider raising an exception or handling the error appropriately
-        else:
-            logger.info(f"User {uid} already exists in the users collection")
+                logger.error(f"Error adding/updating user in Firestore: {str(e)}")
 
         # First check if user exists in admins collection
         try:
@@ -61,25 +62,28 @@ def verify_admin_token(id_token):
             if admin_doc.exists:
                 logger.info(f"User {uid} verified as admin through admins collection")
                 # Set admin claim for future use (important!)
-                auth.set_custom_user_claims(uid, {"admin": True})
-                return {
-                    'uid': uid,
-                    'email': user.email,
-                    'name': user.display_name,
-                    'isAdmin': True
-                }
+                #auth.set_custom_user_claims(uid, {"admin": True})  # May not be necessary
+                # You can fetch additional admin info if needed
+                admin_data = admin_doc.to_dict()
+                user_info = {**admin_data, 'isAdmin': True}  # Merge admin data and isAdmin flag
+
+                # You might want to fetch the user's name from auth
+                #user = auth.get_user(uid)
+                #user_info['name'] = user.display_name
             else:
                 logger.warning(f"User {uid} not found in admins collection")
                 raise ValueError("User is not authorized as admin")
 
         except Exception as e:
             logger.error(f"Error checking admin status in Firestore: {str(e)}")
-            raise
+            raise  # Re-raise the exception after logging
+
+        return user_info  # Return user info if successful
 
 
     except auth.InvalidIdTokenError as e:
         logger.error(f"Invalid token error: {str(e)}")
-        raise ValueError(f"Invalid token: {str(e)}")  # Re-raise with a more user-friendly message
+        raise ValueError(f"Invalid token: {str(e)}")
     except Exception as e:
         logger.error(f"Token verification error: {str(e)}")
         raise
