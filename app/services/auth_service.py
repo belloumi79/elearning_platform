@@ -86,3 +86,57 @@ def create_admin_user(email):
     except Exception as e:
         logger.error(f"Error creating admin user: {str(e)}")
         raise
+
+
+def get_user_profile(uid):
+    """
+    Get user profile and enrolled courses.
+
+    Args:
+        uid (str): User ID
+
+    Returns:
+        dict: User profile and enrolled courses
+    """
+    try:
+        logger.info(f"Fetching user profile for UID: {uid}")
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+
+        if not user_doc.exists:
+            logger.warning(f"User {uid} not found in users collection")
+            raise ValueError("User not found")
+
+        user_data = user_doc.to_dict()
+        user = User.from_dict(user_data)
+        user_profile = user.to_dict()
+
+        # Check if user is a student
+        student_ref = db.collection('students').document(uid)
+        student_doc = student_ref.get()
+        if student_doc.exists:
+            student_data = student_doc.to_dict()
+            student = Student.from_dict(student_data)
+            user_profile['student'] = student.to_dict()
+        else:
+            user_profile['student'] = None
+
+        # Fetch enrolled courses
+        enrollments_ref = db.collection('enrollments').where('student_id', '==', uid)
+        enrollments = enrollments_ref.get()
+        enrolled_courses = []
+        for enrollment in enrollments:
+            course_id = enrollment.to_dict().get('course_id')
+            if course_id:
+                course_ref = db.collection('courses').document(course_id)
+                course_doc = course_ref.get()
+                if course_doc.exists:
+                    course_data = course_doc.to_dict()
+                    course = Course.from_dict(course_data)
+                    enrolled_courses.append(course.to_dict())
+        user_profile['enrolled_courses'] = enrolled_courses
+        return user_profile
+
+    except Exception as e:
+        logger.error(f"Error fetching user profile: {str(e)}")
+        raise

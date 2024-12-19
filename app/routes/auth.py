@@ -127,3 +127,25 @@ def admin_logout():
     """Clear the admin session."""
     session.clear()
     return jsonify({'success': True})
+
+@auth_bp.route('/api/user/profile/<uid>', methods=['GET'])
+def get_user_profile_route(uid):
+    """
+    Get user profile and enrolled courses.
+
+    Args:
+        uid (str): User ID
+
+    Returns:
+        JSON response with user profile and enrolled courses
+    """
+    try:
+        from app.services.auth_service import get_user_profile
+        user_profile = get_user_profile(uid)
+        return jsonify(user_profile)
+    except Exception as e:
+        logger.error(f"Error fetching user profile: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
