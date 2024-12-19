@@ -267,3 +267,14 @@ def get_all_courses_public():
         return jsonify(courses), 200, response.headers
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@courses_bp.route('/courses/api/courses', methods=['GET', 'OPTIONS'])
+def get_all_courses_public_with_prefix():
+    """
+    Returns:
+        tuple: JSON response with list of courses and HTTP status code
+        
+    Raises:
+        500: If there an error retrieving courses
+    """
+    return get_all_courses_public()
