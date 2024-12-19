@@ -92,8 +92,7 @@ def enroll_in_course():
 @courses_bp.route('/api/courses/<course_id>/enroll', methods=['POST'])
 @require_admin
 def enroll_student(course_id):
-    """Enroll a student in a course.
-    
+        
     Expected JSON payload:
     {
         "user_id": str
@@ -104,8 +103,6 @@ def enroll_student(course_id):
         
     Raises:
         400: If the request data is invalid
-        404: If the course is not found
-        500: If there's an error during enrollment
     """
     try:
         data = request.get_json()
@@ -139,7 +136,7 @@ def create_course():
         
     Raises:
         400: If the request data is invalid
-        500: If there's an error creating the course
+        500: If there an error creating the course
     """
     try:
         data = request.get_json()
@@ -163,7 +160,7 @@ def get_course(course_id):
         
     Raises:
         404: If the course is not found
-        500: If there's an error retrieving the course
+        500: If theren an error retrieving the course
     """
     try:
         course = courses_service.get_course_by_id(course_id)
@@ -197,7 +194,7 @@ def update_course(course_id):
     Raises:
         404: If the course is not found
         400: If the request data is invalid
-        500: If there's an error updating the course
+        500: If there an error updating the course
     """
     try:
         data = request.get_json()
@@ -223,7 +220,7 @@ def delete_course(course_id):
         
     Raises:
         404: If the course is not found
-        500: If there's an error deleting the course
+        500: If there an error deleting the course
     """
     try:
         success = courses_service.delete_course(course_id)
@@ -242,7 +239,7 @@ def get_instructors():
         tuple: JSON response with list of instructors and HTTP status code
         
     Raises:
-        500: If there's an error retrieving instructors
+        500: If there an error retrieving instructors
     """
     try:
         instructors = courses_service.get_all_instructors()
@@ -252,13 +249,12 @@ def get_instructors():
 
 @courses_bp.route('/api/courses', methods=['GET', 'OPTIONS'])
 def get_all_courses_public():
-    """Get all courses in the system without authentication.
-    
+    """
     Returns:
         tuple: JSON response with list of courses and HTTP status code
         
     Raises:
-        500: If there's an error retrieving courses
+        500: If there an error retrieving courses
     """
     response = make_response()
     response.headers.add('Access-Control-Allow-Origin', '*')
