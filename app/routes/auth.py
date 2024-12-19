@@ -16,6 +16,7 @@ from firebase_admin import auth, firestore
 import secrets
 import logging
 from datetime import datetime
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint('auth', __name__)

@@ -15,6 +15,10 @@ Dependencies:
 
 from firebase_admin import auth, firestore
 import logging
+from app.models.user import User
+from datetime import datetime
+from app.models.student import Student
+from app.models.course import Course
 
 logger = logging.getLogger(__name__)
 db = firestore.client()
@@ -28,6 +32,26 @@ def verify_admin_token(id_token):
         uid = decoded_token['uid']
         user = auth.get_user(uid)
         logger.info(f"Retrieved user data - Email: {user.email}, UID: {uid}")
+
+        # Check if the user already exists in the users collection
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+
+        if not user_doc.exists:
+            # Add the user to the users collection
+            user_data = {
+                'uid': uid,
+                'email': user.email,
+                'created_at': datetime.utcnow()
+            }
+            try:
+                user_ref.set(user_data)
+                logger.info(f"User {uid} added to the users collection")
+            except Exception as e:
+                logger.error(f"Error adding user to Firestore: {str(e)}")
+                # Consider raising an exception or handling the error appropriately
+        else:
+            logger.info(f"User {uid} already exists in the users collection")
 
         # First check if user exists in admins collection
         try:
