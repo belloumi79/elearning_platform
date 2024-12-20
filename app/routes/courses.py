@@ -60,8 +60,9 @@ def enroll_in_course(uid):
     # Set CORS headers
     response = make_response()
     response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')  
+    response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
 
     if request.method == 'OPTIONS':
         return response
