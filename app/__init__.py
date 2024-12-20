@@ -84,7 +84,7 @@ def create_app(config_name=None):
     
     app.register_blueprint(admin_bp)  
     app.register_blueprint(auth_bp)
-    app.register_blueprint(courses_bp, url_prefix='/courses')
+    app.register_blueprint(courses_bp)
     
     @app.route('/')
     def index():

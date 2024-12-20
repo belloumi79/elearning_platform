@@ -247,34 +247,19 @@ def get_instructors():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@courses_bp.route('/api/courses', methods=['GET', 'OPTIONS'])
+@courses_bp.route('/api/courses', methods=['GET'])
 def get_all_courses_public():
     """
+    Public endpoint for fetching all courses.
+
     Returns:
         tuple: JSON response with list of courses and HTTP status code
-        
+
     Raises:
-        500: If there an error retrieving courses
+        500: If there's an error retrieving courses
     """
-    response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
-    if request.method == 'OPTIONS':
-        return response
     try:
         courses = courses_service.get_all_courses()
-        return jsonify(courses), 200, response.headers
+        return jsonify(courses)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-@courses_bp.route('/courses/api/courses', methods=['GET', 'OPTIONS'])
-def get_all_courses_public_with_prefix():
-    """
-    Returns:
-        tuple: JSON response with list of courses and HTTP status code
-        
-    Raises:
-        500: If there an error retrieving courses
-    """
-    return get_all_courses_public()
