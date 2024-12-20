@@ -47,16 +47,16 @@ def get_courses():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@courses_bp.route('/api/user/enroll/', methods=['POST'])
-def enroll_in_course():
-    """Allows an authenticated user to enroll in a course.
+@courses_bp.route('/api/user/enroll/<uid>', methods=['POST'])
+def enroll_in_course(uid):
+    """Allows a user to enroll in a course.
 
-    Expects a JSON payload with the `course_id`.
+    Expects a JSON payload with the `course_id` and the user ID in the URL.
 
     Returns:
         A JSON response indicating success or failure, along with relevant data or error messages.
     """
-    
+
     # Set CORS headers
     response = make_response()
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -66,7 +66,6 @@ def enroll_in_course():
     if request.method == 'OPTIONS':
         return response
 
-    """
     try:
         data = request.get_json()
         course_id = data.get('course_id')
@@ -74,12 +73,7 @@ def enroll_in_course():
         if not course_id:
             return jsonify({'error': 'Missing course_id'}), 400
 
-        if not current_user.is_authenticated:
-            return jsonify({'error': 'Authentication required'}), 401
-
-        user_id = current_user.id
-
-        enrollment_result = courses_service.enroll_user_in_course(user_id, course_id)
+        enrollment_result = courses_service.enroll_user_in_course(uid, course_id)
 
         if enrollment_result['success']:
             return jsonify({'message': 'Successfully enrolled in course'}), 200, response.headers
@@ -93,6 +87,7 @@ def enroll_in_course():
 @require_admin
 def enroll_student(course_id):
         
+    """
     Expected JSON payload:
     {
         "user_id": str
