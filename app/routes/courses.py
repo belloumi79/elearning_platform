@@ -47,7 +47,7 @@ def get_courses():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@courses_bp.route('/api/user/enroll/<uid>', methods=['POST'])
+@courses_bp.route('/api/user/enroll/<uid>', methods=['POST', 'OPTIONS'])
 def enroll_in_course(uid):
     """Allows a user to enroll in a course.
 
@@ -56,18 +56,11 @@ def enroll_in_course(uid):
     Returns:
         A JSON response indicating success or failure, along with relevant data or error messages.
     """
-
-    # Set CORS headers
-    response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
-
-    if request.method == 'OPTIONS':
-        return response
-
     try:
+        if request.method == 'OPTIONS':
+            response = make_response()
+            return response
+
         data = request.get_json()
         course_id = data.get('course_id')
 
@@ -77,12 +70,12 @@ def enroll_in_course(uid):
         enrollment_result = courses_service.enroll_user_in_course(uid, course_id)
 
         if enrollment_result['success']:
-            return jsonify({'message': 'Successfully enrolled in course'}), 200, response.headers
+            return jsonify({'message': 'Successfully enrolled in course'}), 200
         else:
-            return jsonify({'error': enrollment_result['message']}), enrollment_result['status_code'], response.headers
+            return jsonify({'error': enrollment_result['message']}), enrollment_result['status_code']
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500, response.headers
+        return jsonify({'error': str(e)}), 500
 
 @courses_bp.route('/api/courses/<course_id>/enroll', methods=['POST'])
 @require_admin
