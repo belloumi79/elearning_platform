@@ -1,19 +1,3 @@
-"""
-Course management service module for the e-learning platform.
-
-This module provides a comprehensive service layer for managing courses,
-including course creation, updates, deletion, and enrollment operations.
-It handles all interactions with the Firestore database for course-related
-operations.
-
-Classes:
-    CoursesService: Main service class for course management
-
-Dependencies:
-    - firebase_admin.firestore: For database operations
-    - datetime: For timestamp handling
-"""
-
 from typing import Dict, List, Optional
 from datetime import datetime
 import firebase_admin
@@ -22,17 +6,17 @@ from firebase_admin import firestore
 class CoursesService:
     """
     Service class for managing course-related operations.
-    
+
     This class provides methods for course CRUD operations and enrollment
     management. It maintains connections to the necessary Firestore
     collections and handles all database interactions.
-    
+
     Attributes:
         db: Firestore client instance
         courses_ref: Reference to courses collection
         instructors_ref: Reference to instructors collection
     """
-    
+
     def __init__(self):
         """Initialize the courses service with database connections."""
         self.db = firestore.client()
@@ -42,12 +26,12 @@ class CoursesService:
     def get_all_courses(self) -> List[Dict]:
         """
         Retrieve all courses with additional metadata.
-        
+
         Fetches all courses and enriches them with:
         - Instructor information
         - Student enrollment count
         - Course status and metadata
-        
+
         Returns:
             List[Dict]: List of course dictionaries, each containing:
                 - id (str): Course unique identifier
@@ -83,7 +67,7 @@ class CoursesService:
     def create_course(self, course_data: Dict) -> Dict:
         """
         Create a new course in the database.
-        
+
         Args:
             course_data (Dict): Course information containing:
                 - title (str): Course title
@@ -93,10 +77,10 @@ class CoursesService:
                 - status (str, optional): Course status
                 - start_date (datetime, optional): Course start date
                 - end_date (datetime, optional): Course end date
-        
+
         Returns:
             Dict: Created course data including generated ID
-            
+
         Raises:
             ValueError: If required fields are missing or invalid
             Exception: If there's an error creating the course
@@ -119,7 +103,7 @@ class CoursesService:
         instructor_doc = self.instructors_ref.document(course_data['instructor_id']).get()
         if not instructor_doc.exists:
             raise ValueError("Invalid instructor_id")
-            
+
         instructor_data = instructor_doc.to_dict()
         instructor_name = instructor_data.get('name', 'Unknown')
 
@@ -143,7 +127,7 @@ class CoursesService:
     def update_course(self, course_id: str, course_data: Dict) -> Dict:
         """
         Update an existing course.
-        
+
         Args:
             course_id (str): Course unique identifier
             course_data (Dict): Updated course information, may include:
@@ -153,10 +137,10 @@ class CoursesService:
                 - status (str): New course status
                 - start_date (datetime): New start date
                 - end_date (datetime): New end date
-                
+
         Returns:
             Dict: Updated course data
-            
+
         Raises:
             ValueError: If course_id is invalid or data is invalid
             Exception: If there's an error updating the course
@@ -186,7 +170,7 @@ class CoursesService:
         # Return updated course data
         updated_course = course_ref.get().to_dict()
         updated_course['id'] = course_id
-        
+
         # Get instructor name
         if 'instructor_id' in updated_course:
             instructor_doc = self.instructors_ref.document(updated_course['instructor_id']).get()
@@ -200,18 +184,18 @@ class CoursesService:
     def delete_course(self, course_id: str) -> bool:
         """
         Delete a course and its related data.
-        
+
         This operation will:
         1. Delete the course document
         2. Delete all related enrollments
         3. Update instructor's course count
-        
+
         Args:
             course_id (str): Course unique identifier
-            
+
         Returns:
             bool: True if deletion was successful
-            
+
         Raises:
             ValueError: If course_id is invalid
             Exception: If there's an error during deletion
@@ -235,7 +219,7 @@ class CoursesService:
     def get_course_by_id(self, course_id: str) -> Optional[Dict]:
         """
         Retrieve a specific course by ID.
-        
+
         Args:
             course_id: The ID of the course to retrieve
         Returns:
@@ -280,14 +264,14 @@ class CoursesService:
     def enroll_student_in_course(self, user_id: str, course_id: str) -> Dict:
         """
         Enroll a student in a course.
-        
+
         Args:
             user_id (str): The ID of the user to enroll
             course_id (str): The ID of the course to enroll in
-            
+
         Returns:
             Dict: Enrollment data
-            
+
         Raises:
             ValueError: If user or course is invalid or user is already enrolled
             Exception: If there's an error during enrollment
@@ -299,7 +283,7 @@ class CoursesService:
 
         # Validate user exists (basic check, assuming user service handles this)
         # In a real app, you'd fetch the user document to validate
-        
+
         # Check if user is already enrolled
         enrollment_ref = self.db.collection('enrollments')\
             .where('user_id', '==', user_id)\
@@ -307,7 +291,7 @@ class CoursesService:
             .get()
         if len(enrollment_ref) > 0:
             raise ValueError(f"User {user_id} is already enrolled in course {course_id}")
-        
+
         # Create enrollment document
         enrollment_data = {
             'user_id': user_id,
@@ -316,7 +300,51 @@ class CoursesService:
         }
         enrollment_doc_ref = self.db.collection('enrollments').document()
         enrollment_doc_ref.set(enrollment_data)
-        
+
+        # Return enrollment data
+        enrollment_data['id'] = enrollment_doc_ref.id
+        return enrollment_data
+
+    def enroll_user_in_course(self, user_id: str, course_id: str) -> Dict:
+        """
+        Enroll a user in a course.
+
+        Args:
+            user_id (str): The ID of the user to enroll
+            course_id (str): The ID of the course to enroll in
+
+        Returns:
+            Dict: Enrollment data
+
+        Raises:
+            ValueError: If user or course is invalid or user is already enrolled
+            Exception: If there's an error during enrollment
+        """
+        # Validate course exists
+        course_ref = self.courses_ref.document(course_id)
+        if not course_ref.get().exists:
+            raise ValueError(f"Course not found: {course_id}")
+
+        # Validate user exists (basic check, assuming user service handles this)
+        # In a real app, you'd fetch the user document to validate
+
+        # Check if user is already enrolled
+        enrollment_ref = self.db.collection('enrollments')\
+            .where('user_id', '==', user_id)\
+            .where('course_id', '==', course_id)\
+            .get()
+        if len(enrollment_ref) > 0:
+            raise ValueError(f"User {user_id} is already enrolled in course {course_id}")
+
+        # Create enrollment document
+        enrollment_data = {
+            'user_id': user_id,
+            'course_id': course_id,
+            'enrolled_at': firestore.SERVER_TIMESTAMP
+        }
+        enrollment_doc_ref = self.db.collection('enrollments').document()
+        enrollment_doc_ref.set(enrollment_data)
+
         # Return enrollment data
         enrollment_data['id'] = enrollment_doc_ref.id
         return enrollment_data
