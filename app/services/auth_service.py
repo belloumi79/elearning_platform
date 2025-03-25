@@ -1,89 +1,77 @@
 """
 Authentication service module for the e-learning platform.
 
-This module handles Firebase token verification and admin status checking.
-It interacts with Firebase Authentication and Firestore to validate user
+This module handles Supabase authentication and admin status checking.
+It interacts with Supabase Auth and Supabase Postgres to validate user
 credentials and retrieve user data.
-
-Functions:
-    verify_admin_token: Verify Firebase ID token and check admin status
-
-Dependencies:
-    - firebase_admin.auth: For token verification
-    - firebase_admin.firestore: For user data retrieval
 """
 
-from firebase_admin import auth, firestore
 import logging
 from app.models.user import User
 from datetime import datetime
 from app.models.student import Student
 from app.models.course import Course
+from supabase import create_client, Client
+import os
 
 logger = logging.getLogger(__name__)
-db = firestore.client()
 
-def verify_admin_token(id_token):
+# Initialize Supabase client
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    raise ValueError("Supabase URL and Anon key must be set in environment variables.")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+
+def verify_admin_token(access_token):
     try:
         logger.info("Starting token verification process...")
-        decoded_token = auth.verify_id_token(id_token, check_revoked=True)
-        logger.info(f"Token verified successfully. Claims: {decoded_token.get('claims', {})}")
+        user = supabase.auth.get_user(access_token)
+        if user.error:
+            logger.error(f"Token verification failed: {user.error}")
+            raise ValueError(f"Invalid token: {user.error}")
 
-        uid = decoded_token['uid']
-        
-        # Check if user is admin before adding to 'users' collection
+        logger.info(f"Token verified successfully. User ID: {user.user.id}")
+        uid = user.user.id
+
+        # Check if user is admin
         is_admin = False
         try:
-            admin_ref = db.collection('admins').document(uid)
-            admin_doc = admin_ref.get()
-            is_admin = admin_doc.exists
+            response = supabase.from_('admins').select("*").eq('uid', uid).execute()
+            if response.data:
+                is_admin = True
         except Exception as e:
-            logger.error(f"Error checking admin status in Firestore: {str(e)}")
+            logger.error(f"Error checking admin status in Supabase: {str(e)}")
 
-        # Add user to 'users' collection if not admin
-        if not is_admin:
-            try:
-                user_ref = db.collection('users').document(uid)
+        # Add user to 'users' table if not exists (or update)
+        try:
+            response = supabase.from_('users').select("*").eq('uid', uid).execute()
+            if not response.data:
                 user_data = {
                     'uid': uid,
-                    'email': decoded_token['email'],
-                    'created_at': datetime.utcnow()
+                    'email': user.user.email,
+                    'created_at': datetime.utcnow().isoformat()  # Use ISO format for datetime
                 }
-                user_ref.set(user_data, merge=True)
-                logger.info(f"User {uid} added/updated in Firestore")
-            except Exception as e:
-                logger.error(f"Error adding/updating user in Firestore: {str(e)}")
-
-        # First check if user exists in admins collection
-        try:
-            admin_ref = db.collection('admins').document(uid)
-            admin_doc = admin_ref.get()
-
-            if admin_doc.exists:
-                logger.info(f"User {uid} verified as admin through admins collection")
-                # Set admin claim for future use (important!)
-                #auth.set_custom_user_claims(uid, {"admin": True})  # May not be necessary
-                # You can fetch additional admin info if needed
-                admin_data = admin_doc.to_dict()
-                user_info = {**admin_data, 'isAdmin': True}  # Merge admin data and isAdmin flag
-
-                # You might want to fetch the user's name from auth
-                #user = auth.get_user(uid)
-                #user_info['name'] = user.display_name
+                response = supabase.from_('users').insert(user_data).execute()
+                logger.info(f"User {uid} added to Supabase users table")
             else:
-                logger.warning(f"User {uid} not found in admins collection")
-                raise ValueError("User is not authorized as admin")
-
+                logger.info(f"User {uid} already exists in Supabase users table")
         except Exception as e:
-            logger.error(f"Error checking admin status in Firestore: {str(e)}")
-            raise  # Re-raise the exception after logging
+            logger.error(f"Error adding/updating user in Supabase: {str(e)}")
 
-        return user_info  # Return user info if successful
+        if is_admin:
+            logger.info(f"User {uid} verified as admin")
+            user_info = {'uid': uid, 'email': user.user.email, 'isAdmin': True}
+            return user_info
+        else:
+            logger.warning(f"User {uid} not authorized as admin")
+            raise ValueError("User is not authorized as admin")
 
-
-    except auth.InvalidIdTokenError as e:
-        logger.error(f"Invalid token error: {str(e)}")
-        raise ValueError(f"Invalid token: {str(e)}")
+    except ValueError as ve:
+        raise ve  # Re-raise ValueError
     except Exception as e:
         logger.error(f"Token verification error: {str(e)}")
         raise
@@ -91,28 +79,86 @@ def verify_admin_token(id_token):
 
 def create_admin_user(email):
     """
-    Create or verify an admin user in Firestore.
+    Create or verify an admin user in Supabase 'admins' table.
     This should be run once to set up the initial admin.
     """
     try:
-        # Get user by email
-        user = auth.get_user_by_email(email)
-        
-        # Set admin custom claim
-        auth.set_custom_user_claims(user.uid, {'admin': True})
-        
-        # Create admin document in Firestore
-        admin_ref = db.collection('admins').document(user.uid)
-        admin_ref.set({
-            'email': email,
-            'created_at': datetime.utcnow(),
-            'uid': user.uid
-        })
-        
-        logger.info(f"Successfully created admin user for {email}")
-        return True
+        # Find user by email in auth.users table
+        response = supabase.auth.admin.list_users(emails=[email])
+        if response.users:
+            user = response.users[0]
+            uid = user.id
+
+            # Insert admin record in 'admins' table
+            admin_data = {
+                'uid': uid,
+                'email': email,
+                'created_at': datetime.utcnow().isoformat()
+            }
+            response = supabase.from_('admins').insert(admin_data).execute()
+            if response.error:
+                logger.error(f"Error creating admin user in Supabase: {response.error}")
+                raise Exception(f"Supabase error: {response.error.message}")
+
+            logger.info(f"Successfully created admin user for {email}")
+            return True
+        else:
+            logger.error(f"User with email {email} not found in Supabase Auth")
+            raise ValueError(f"User with email {email} not found in Supabase Auth")
+
+    except ValueError as ve:
+        raise ve
     except Exception as e:
         logger.error(f"Error creating admin user: {str(e)}")
+        raise
+
+
+def signup_with_gmail(access_token):
+    """Sign up a new user with Gmail using Supabase access token.
+
+    Args:
+        access_token (str): Supabase access token
+
+    Returns:
+        str: User ID
+
+    Raises:
+        ValueError: If no access token is provided or if the token is invalid.
+    """
+    try:
+        # Get user from access token
+        user = supabase.auth.get_user(access_token)
+        if user.error:
+            logger.error(f"Invalid token: {user.error}")
+            raise ValueError(f"Invalid token: {user.error}")
+
+        uid = user.user.id
+        email = user.user.email
+
+        # Check if the user already exists in 'users' table
+        response = supabase.from_('users').select("*").eq('uid', uid).execute()
+        if response.data:
+            logger.info(f"User {uid} already exists")
+            return uid
+
+        # Create a new user in 'users' table
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'created_at': datetime.utcnow().isoformat()
+        }
+        response = supabase.from_('users').insert(user_data).execute()
+        if response.error:
+            logger.error(f"Error signing up user: {response.error}")
+            raise Exception(f"Supabase error: {response.error.message}")
+
+        logger.info(f"User {uid} created successfully")
+        return uid
+
+    except ValueError as ve:
+        raise ve
+    except Exception as e:
+        logger.error(f"Error signing up user: {str(e)}")
         raise
 
 
@@ -128,43 +174,51 @@ def get_user_profile(uid):
     """
     try:
         logger.info(f"Fetching user profile for UID: {uid}")
-        user_ref = db.collection('users').document(uid)
-        user_doc = user_ref.get()
-
-        if not user_doc.exists:
-            logger.warning(f"User {uid} not found in users collection")
+        # Fetch user from 'users' table
+        response = supabase.from_('users').select("*").eq('uid', uid).execute()
+        if not response.data:
+            logger.warning(f"User {uid} not found in users table")
             raise ValueError("User not found")
 
-        user_data = user_doc.to_dict()
+        user_data_list = response.data
+        if not user_data_list:
+            raise ValueError("No user data found")
+        user_data = user_data_list[0] # Assuming only one user with given uid
         user = User.from_dict(user_data)
         user_profile = user.to_dict()
 
         # Check if user is a student
-        student_ref = db.collection('students').document(uid)
-        student_doc = student_ref.get()
-        if student_doc.exists:
-            student_data = student_doc.to_dict()
-            student = Student.from_dict(student_data)
-            user_profile['student'] = student.to_dict()
+        response = supabase.from_('students').select("*").eq('student_id', uid).execute()
+        if response.data:
+            student_data_list = response.data
+            if student_data_list:
+                student_data = student_data_list[0]
+                student = Student.from_dict(student_data)
+                user_profile['student'] = student.to_dict()
+            else:
+                user_profile['student'] = None # Student data not found, but user might still be a student record
         else:
             user_profile['student'] = None
 
         # Fetch enrolled courses
-        enrollments_ref = db.collection('enrollments').where('student_id', '==', uid)
-        enrollments = enrollments_ref.get()
+        response = supabase.from_('enrollments').select("*").eq('student_id', uid).execute()
+        enrollments_data = response.data
         enrolled_courses = []
-        for enrollment in enrollments:
-            course_id = enrollment.to_dict().get('course_id')
-            if course_id:
-                course_ref = db.collection('courses').document(course_id)
-                course_doc = course_ref.get()
-                if course_doc.exists:
-                    course_data = course_doc.to_dict()
-                    course = Course.from_dict(course_data)
-                    enrolled_courses.append(course.to_dict())
+        if enrollments_data:
+            for enrollment_data in enrollments_data:
+                course_id = enrollment_data.get('course_id')
+                if course_id:
+                    course_response = supabase.from_('courses').select("*").eq('course_id', course_id).execute()
+                    course_data_list = course_response.data
+                    if course_data_list:
+                        course_data = course_data_list[0]
+                        course = Course.from_dict(course_data)
+                        enrolled_courses.append(course.to_dict())
         user_profile['enrolled_courses'] = enrolled_courses
         return user_profile
 
+    except ValueError as ve:
+        raise ve
     except Exception as e:
         logger.error(f"Error fetching user profile: {str(e)}")
         raise

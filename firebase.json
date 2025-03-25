@@ -4,7 +4,7 @@
     "runtime": "python311"
   },
   "hosting": {
-    "public": "/home/user/elearning_platform",
+    "public": "app/static",
     "ignore": [
       "firebase.json",
       "**/.*",

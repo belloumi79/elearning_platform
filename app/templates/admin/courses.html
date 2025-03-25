@@ -49,7 +49,6 @@
                     <th>السعر</th>
                     <th>المدرس</th>
                     <th>الحالة</th>
-                    <th>عدد الطلاب</th>
                     <th>تاريخ الإنشاء</th>
                     <th>الإجراءات</th>
                 </tr>
@@ -256,10 +255,6 @@
                         render: function(data) {
                             return data === 'active' ? 'نشط' : 'غير نشط';
                         }
-                    },
-                    { 
-                        data: 'student_count',
-                        defaultContent: '0'
                     },
                     { 
                         data: 'created_at',

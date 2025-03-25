@@ -129,6 +129,41 @@ def admin_logout():
     session.clear()
     return jsonify({'success': True})
 
+@auth_bp.route('/api/signup', methods=['POST'])
+def signup():
+    """Sign up a new user with Gmail using Firebase ID token.
+
+    Request body must contain:
+        - idToken: Firebase ID token
+
+    Returns:
+        JSON response with:
+            - success: bool
+            - uid: str (if success is True)
+            - error: str (if success is False)
+    """
+    try:
+        # Get ID token from request
+        id_token = request.json.get('idToken')
+        if not id_token:
+            raise ValueError("No ID token provided")
+
+        # Sign up user with Gmail
+        from app.services.auth_service import signup_with_gmail
+        uid = signup_with_gmail(id_token)
+
+        return jsonify({
+            'success': True,
+            'uid': uid
+        })
+
+    except Exception as e:
+        logger.error(f"Signup failed: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
 @auth_bp.route('/api/user/profile/<uid>', methods=['GET'])
 def get_user_profile_route(uid):
     """

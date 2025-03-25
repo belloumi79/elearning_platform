@@ -12,164 +12,123 @@
     <style>
         body {
             font-family: 'Cairo', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .login-container {
+            max-width: 500px;
+            margin: 100px auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            background: white;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        .form-control {
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+        .btn-login {
+            background-color: #3498db;
+            border: none;
+            padding: 12px;
+            font-weight: bold;
+            width: 100%;
         }
         .loading {
             display: none;
             text-align: center;
-            margin-top: 10px;
+            margin-top: 20px;
+        }
+        .error-message {
+            text-align: center;
+            margin-top: 15px;
         }
     </style>
 </head>
-<body class="bg-light">
+<body>
     <div class="container">
-        <div class="row justify-content-center mt-5">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="text-center">تسجيل الدخول للوحة التحكم</h3>
-                    </div>
-                    <div class="card-body">
-                        <form id="loginForm" onsubmit="handleLogin(event)">
-                            <div class="mb-3">
-                                <label for="email" class="form-label">البريد الإلكتروني</label>
-                                <input type="email" class="form-control" id="email" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="password" class="form-label">كلمة المرور</label>
-                                <input type="password" class="form-control" id="password" required>
-                            </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary" id="loginButton">تسجيل الدخول</button>
-                            </div>
-                        </form>
-                        <div id="loadingIndicator" class="loading">
-                            جاري تسجيل الدخول...
-                        </div>
-                        <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
-                    </div>
-                </div>
+        <div class="login-container">
+            <div class="login-header">
+                <h2>تسجيل الدخول للوحة التحكم</h2>
+                <p class="text-muted">الرجاء إدخال بيانات الاعتماد الخاصة بك</p>
             </div>
+            
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="mb-3">
+                    <label for="email" class="form-label">البريد الإلكتروني</label>
+                    <input type="email" class="form-control" id="email" required placeholder="أدخل بريدك الإلكتروني">
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">كلمة المرور</label>
+                    <input type="password" class="form-control" id="password" required placeholder="أدخل كلمة المرور">
+                </div>
+                <button type="submit" class="btn btn-primary btn-login" id="loginButton">تسجيل الدخول</button>
+            </form>
+
+            <div id="loadingIndicator" class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">جاري التحميل...</span>
+                </div>
+                <p>جاري تسجيل الدخول...</p>
+            </div>
+
+            <div id="errorMessage" class="alert alert-danger error-message" style="display: none;"></div>
         </div>
     </div>
 
-    <!-- Firebase App (the core Firebase SDK) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <!-- Firebase Auth -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-
     <script>
-        // Initialize Firebase with your config
-        const firebaseConfig = {
-            apiKey: "{{ config['FIREBASE_CONFIG']['apiKey'] }}",
-            authDomain: "{{ config['FIREBASE_CONFIG']['authDomain'] }}",
-            projectId: "{{ config['FIREBASE_CONFIG']['projectId'] }}",
-            storageBucket: "{{ config['FIREBASE_CONFIG']['storageBucket'] }}",
-            messagingSenderId: "{{ config['FIREBASE_CONFIG']['messagingSenderId'] }}",
-            appId: "{{ config['FIREBASE_CONFIG']['appId'] }}"
-        };
-
-        // For debugging
-        console.log('Firebase Config:', firebaseConfig);
-
-        let auth;
-        try {
-            // Initialize Firebase
-            firebase.initializeApp(firebaseConfig);
-            auth = firebase.auth();
-            
-            // Set persistence to LOCAL
-            auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-                .then(() => {
-                    console.log('Firebase persistence set to LOCAL');
-                })
-                .catch((error) => {
-                    console.error('Error setting persistence:', error);
-                });
-
-            // Set up auth state listener
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    console.log('User is signed in:', user.email);
-                } else {
-                    console.log('No user is signed in');
-                }
-            });
-
-            console.log('Firebase initialized successfully');
-        } catch (error) {
-            console.error('Firebase initialization error:', error);
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = 'خطأ في تهيئة Firebase: ' + error.message;
-            errorDiv.style.display = 'block';
-        }
-
         async function handleLogin(event) {
             event.preventDefault();
-            
+
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('errorMessage');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const loginButton = document.getElementById('loginButton');
-            
+
+            // Clear previous errors
             errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            
+            // Show loading state
             loadingIndicator.style.display = 'block';
             loginButton.disabled = true;
 
             try {
-                // Sign in with Firebase
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                const user = userCredential.user;
-                console.log('User signed in:', user);
-                
-                // Get fresh ID token
-                const idToken = await user.getIdToken(true);
-                
-                // Verify admin status with backend
-                const response = await fetch('/api/admin/verify', {
+                const response = await fetch('/api/admin/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ idToken }),
+                    body: JSON.stringify({ 
+                        email: email.trim(),
+                        password: password 
+                    }),
                     credentials: 'same-origin'
                 });
 
                 const data = await response.json();
-                
-                if (data.success) {
-                    // Store CSRF token
-                    localStorage.setItem('csrfToken', data.csrfToken);
-                    
-                    // Redirect to dashboard
+
+                if (response.ok && data.success) {
+                    // Store token and redirect
+                    localStorage.setItem('adminToken', data.token);
                     window.location.href = '/admin/dashboard';
                 } else {
-                    throw new Error(data.error || 'Failed to verify admin status');
+                    // Show specific error message if available
+                    const errorMsg = data.message || 'خطأ في تسجيل الدخول: البريد الإلكتروني أو كلمة المرور غير صحيحة';
+                    throw new Error(errorMsg);
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                errorDiv.textContent = getErrorMessage(error);
+                errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
             } finally {
                 loadingIndicator.style.display = 'none';
                 loginButton.disabled = false;
-            }
-        }
-
-        function getErrorMessage(error) {
-            switch (error.code) {
-                case 'auth/invalid-email':
-                    return 'البريد الإلكتروني غير صالح';
-                case 'auth/user-disabled':
-                    return 'تم تعطيل هذا الحساب';
-                case 'auth/user-not-found':
-                    return 'لم يتم العثور على مستخدم بهذا البريد الإلكتروني';
-                case 'auth/wrong-password':
-                    return 'كلمة المرور غير صحيحة';
-                case 'auth/invalid-credential':
-                    return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
-                default:
-                    return error.message;
             }
         }
     </script>

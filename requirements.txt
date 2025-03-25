@@ -1,11 +1,9 @@
-flask
-firebase-admin
-python-dotenv
-flask-cors
-gunicorn
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
-Flask-Limiter
-Flask-Session
-Flask-Login
+# Requirements for the e-learning platform
+flask==3.0.2
+flask-cors==3.0.10
+python-dotenv==1.0.0
+supabase>=2.14.0
+python-multipart==0.0.3
+passlib==1.7.4
+python-dateutil==2.8.2
+psycopg2-binary==2.9.5

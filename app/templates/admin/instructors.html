@@ -21,14 +21,13 @@
                     <th>الاسم</th>
                     <th>البريد الإلكتروني</th>
                     <th>رقم الهاتف</th>
-                    <th>التخصصات</th>
                     <th>الحالة</th>
+                    <th>تاريخ الإنضمام</th>
+                    <th>تاريخ التحديث</th>
                     <th>الإجراءات</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Filled dynamically -->
-            </tbody>
+            <tbody></tbody>
         </table>
     </div>
 </div>
@@ -56,9 +55,11 @@
                         <input type="tel" class="form-control" id="phone" name="phone" required>
                     </div>
                     <div class="mb-3">
-                        <label for="specialties" class="form-label">التخصصات</label>
-                        <input type="text" class="form-control" id="specialties" name="specialties" 
-                               placeholder="أدخل التخصصات مفصولة بفواصل">
+                        <label for="status" class="form-label">الحالة</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="active" selected>نشط</option>
+                            <option value="inactive">غير نشط</option>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label for="password" class="form-label">كلمة المرور</label>
@@ -75,7 +76,8 @@
 </div>
 
 <!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteInstructorModal" tabindex="-1" aria-labelledby="deleteInstructorModalLabel" aria-hidden="true">
+<div class="modal fade" id="deleteInstructorModal" tabindex="-1" aria-labelledby="deleteInstructorModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -96,144 +98,155 @@
 
 {% block scripts %}
 <script>
-function loadInstructors() {
-    $.ajax({
-        url: '/admin/api/instructors',
-        method: 'GET',
-        success: function(data) {
-            const table = $('#instructorsTable').DataTable();
-            table.clear();
-            data.forEach(instructor => {
-                table.row.add([
-                    instructor.name,
-                    instructor.email,
-                    instructor.phone || '-',
-                    instructor.specialties?.join(', ') || '-',
-                    instructor.active ? 'نشط' : 'غير نشط',
-                    `<button class="btn btn-sm btn-danger delete-instructor" data-email="${instructor.email}">
-                        <i class="fas fa-trash"></i> حذف
-                    </button>`
-                ]);
-            });
-            table.draw();
-        },
-        error: function(xhr) {
-            showAlert('danger', xhr.responseJSON?.error || 'حدث خطأ أثناء تحميل بيانات المدرسين');
+    // Arabic translations for DataTables
+    const dataTableArabic = {
+        "emptyTable": "لا يوجد بيانات متاحة في الجدول",
+        "info": "عرض _START_ إلى _END_ من _TOTAL_ مدخل",
+        "infoEmpty": "عرض 0 إلى 0 من 0 مدخل",
+        "infoFiltered": "(تمت التصفية من _MAX_ مجموع مدخلات)",
+        "lengthMenu": "عرض _MENU_ مدخل",
+        "loadingRecords": "جاري التحميل...",
+        "processing": "جاري المعالجة...",
+        "search": "بحث:",
+        "zeroRecords": "لم يتم العثور على سجلات مطابقة",
+        "paginate": {
+            "first": "الأول",
+            "last": "الأخير",
+            "next": "التالي",
+            "previous": "السابق"
         }
-    });
-}
+    };
 
-$(document).ready(function() {
-    // Initialize DataTable with Arabic language
-    const table = $('#instructorsTable').DataTable({
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.10.24/i18n/ar.json'
-        },
-        order: [[0, 'asc']],
-        responsive: true
-    });
+    let instructorsTable;
 
-    // Add Instructor Form Submit
-    $('#addInstructorForm').on('submit', function(e) {
-        e.preventDefault();
-        
-        // Validate form
-        const name = $('#name').val().trim();
-        const email = $('#email').val().trim();
-        const phone = $('#phone').val().trim();
-        const password = $('#password').val();
-        
-        if (!name || !email || !phone || !password) {
-            showAlert('danger', 'جميع الحقول مطلوبة');
-            return;
-        }
-
-        const formData = {
-            name: name,
-            email: email,
-            phone: phone,
-            specialties: $('#specialties').val().split(',').filter(s => s.trim()).map(s => s.trim()),
-            password: password
-        };
-
-        // Disable submit button
-        const submitBtn = $('button[type="submit"]', this);
-        submitBtn.prop('disabled', true);
-
-        // Log the request data for debugging
-        console.log('Sending request:', {
-            url: '/admin/api/instructors',
-            method: 'POST',
-            contentType: 'application/json',
-            data: formData
-        });
-
-        fetch('/admin/api/instructors', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData),
-            credentials: 'include'
-        })
-        .then(response => {
-            console.log('Response status:', response.status);
-            return response.json().then(data => ({status: response.status, data}));
-        })
-        .then(({status, data}) => {
-            console.log('Response data:', data);
-            if (status === 201) {
-                $('#addInstructorModal').modal('hide');
-                showAlert('success', 'تم إضافة المدرس بنجاح');
-                loadInstructors();
-                $('#addInstructorForm')[0].reset();
-            } else {
-                throw new Error(data.error || 'حدث خطأ أثناء إضافة المدرس');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showAlert('danger', error.message);
-        })
-        .finally(() => {
-            submitBtn.prop('disabled', false);
-        });
-    });
-
-    // Delete Instructor
-    let emailToDelete = null;
-
-    $(document).on('click', '.delete-instructor', function() {
-        emailToDelete = $(this).data('email');
-        $('#deleteInstructorModal').modal('show');
-    });
-
-    $('#confirmDelete').on('click', function() {
-        if (!emailToDelete) return;
-
-        const btn = $(this);
-        btn.prop('disabled', true);
-
+    function loadInstructors() {
         $.ajax({
-            url: `/admin/api/instructors/${emailToDelete}`,
-            method: 'DELETE',
-            success: function() {
-                $('#deleteInstructorModal').modal('hide');
-                showAlert('success', 'تم حذف المدرس بنجاح');
-                loadInstructors();
+            url: '/admin/api/instructors',
+            method: 'GET',
+            success: function (data) {
+                const table = $('#instructorsTable').DataTable();
+                table.clear();
+                data.forEach(instructor => {
+                    table.row.add([
+                        instructor.name,
+                        instructor.email,
+                        instructor.phone || '-',
+                        instructor.status === 'active' ? 'نشط' : 'غير نشط',
+                        instructor.created_at ? new Date(instructor.created_at).toLocaleDateString('ar-EG') : '',
+                        instructor.updated_at ? new Date(instructor.updated_at).toLocaleDateString('ar-EG') : '',
+                        `<button class="btn btn-sm btn-danger delete-instructor" data-email="${instructor.email}">
+                            <i class="fas fa-trash"></i> حذف
+                        </button>`
+                    ]);
+                });
+                table.draw();
             },
-            error: function(xhr) {
-                showAlert('danger', xhr.responseJSON?.error || 'حدث خطأ أثناء حذف المدرس');
-            },
-            complete: function() {
-                btn.prop('disabled', false);
-                emailToDelete = null;
+            error: function (xhr) {
+                showAlert('danger', xhr.responseJSON?.error || 'حدث خطأ أثناء تحميل بيانات المدرسين');
             }
         });
-    });
+    }
 
-    // Initial load
-    loadInstructors();
-});
+    $(document).ready(function () {
+        // Initialize DataTable with Arabic language and configurations
+        instructorsTable = $('#instructorsTable').DataTable({
+            language: dataTableArabic,
+            order: [[3, 'desc']], // Sort by created_at by default
+            responsive: true,
+            processing: true,
+            serverSide: false,
+            dom: 'Bfrtip'
+        });
+
+        // Add Instructor Form Submit
+        $('#addInstructorForm').on('submit', function (e) {
+            e.preventDefault();
+
+            // Validate form
+            const name = $('#name').val().trim();
+            const email = $('#email').val().trim();
+            const phone = $('#phone').val().trim();
+            const status = $('#status').val();
+            const password = $('#password').val();
+
+            if (!name || !email || !phone || !status || !password) {
+                showAlert('danger', 'جميع الحقول مطلوبة');
+                return;
+            }
+
+            const formData = {
+                name: name,
+                email: email,
+                phone: phone,
+                status: status,
+                password: password
+            };
+
+            // Disable submit button
+            const submitBtn = $('button[type="submit"]', this);
+            submitBtn.prop('disabled', true);
+
+            fetch('/admin/api/instructors', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+                credentials: 'include'
+            })
+                .then(response => response.json().then(data => ({ status: response.status, data })))
+                .then(({ status, data }) => {
+                    if (status === 201) {
+                        $('#addInstructorModal').modal('hide');
+                        showAlert('success', 'تم إضافة المدرس بنجاح');
+                        loadInstructors();
+                        $('#addInstructorForm')[0].reset();
+                    } else {
+                        throw new Error(data.error || 'حدث خطأ أثناء إضافة المدرس');
+                    }
+                })
+                .catch(error => {
+                    showAlert('danger', error.message);
+                })
+                .finally(() => {
+                    submitBtn.prop('disabled', false);
+                });
+        });
+
+        // Delete Instructor
+        let emailToDelete = null;
+
+        $(document).on('click', '.delete-instructor', function () {
+            emailToDelete = $(this).data('email');
+            $('#deleteInstructorModal').modal('show');
+        });
+
+        $('#confirmDelete').on('click', function () {
+            if (!emailToDelete) return;
+
+            const btn = $(this);
+            btn.prop('disabled', true);
+
+            $.ajax({
+                url: `/admin/api/instructors/${emailToDelete}`,
+                method: 'DELETE',
+                success: function () {
+                    $('#deleteInstructorModal').modal('hide');
+                    showAlert('success', 'تم حذف المدرس بنجاح');
+                    loadInstructors();
+                },
+                error: function (xhr) {
+                    showAlert('danger', xhr.responseJSON?.error || 'حدث خطأ أثناء حذف المدرس');
+                },
+                complete: function () {
+                    btn.prop('disabled', false);
+                    emailToDelete = null;
+                }
+            });
+        });
+
+        // Initial load
+        loadInstructors();
+    });
 </script>
 {% endblock %}
