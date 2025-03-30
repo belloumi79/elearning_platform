@@ -1,4 +1,4 @@
-ession torequirementsfalsk session{% extends "admin/base.html" %}
+{% extends "admin/base.html" %}
 
 {% block content %}
 <div class="container mt-4">
@@ -68,6 +68,7 @@ function submitAssignment() {
     const formData = new FormData();
     formData.append('title', $('#assignmentTitle').val());
     formData.append('description', $('#assignmentDescription').val());
+    formData.append('assignment_type', $('#assignmentType').val()); // Add assignment type
     formData.append('due_date', $('#dueDate').val());
     formData.append('max_points', $('#maxPoints').val());
     formData.append('course_id', $('#courseId').val());
@@ -88,12 +89,20 @@ function submitAssignment() {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            // Handle non-2xx responses (like 400, 500) if they return JSON errors
+            return response.json().then(err => { throw err; });
+        }
+        return response.json(); // Only parse JSON if response is ok
+    })
     .then(data => {
-        if (data.id) {
+        // Check if data is not null and has an id
+        if (data && data.id) {
             window.location.href = `/admin/courses/${$('#courseId').val()}/assignments`;
         } else {
-            alert('حدث خطأ أثناء حفظ الواجب: ' + (data.error || ''));
+            // Display error from response if available, otherwise generic message
+            alert('حدث خطأ أثناء حفظ الواجب: ' + (data && data.error ? data.error : 'استجابة غير متوقعة من الخادم.'));
         }
     })
     .catch(error => {
