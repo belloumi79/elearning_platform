@@ -104,6 +104,16 @@ def course_assignments(course_id):
     """Render the assignments management page for a course."""
     return render_template('admin/assignments.html', course_id=course_id)
 
+@admin_bp.route('/courses/<course_id>/assignments/new')
+@require_admin
+def new_assignment_form(course_id):
+    """Render the form to create a new assignment for a specific course."""
+    # Optionally, fetch course details if needed by the template
+    # course = get_course_by_id_service(course_id)
+    # if not course:
+    #     return "Course not found", 404
+    return render_template('admin/new_assignment.html', course_id=course_id)
+
 @admin_bp.route('/instructors')
 @require_admin
 def instructors():
