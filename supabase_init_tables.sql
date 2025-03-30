@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS admins (
 -- Students table  
 CREATE TABLE IF NOT EXISTS students (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES auth.users(id),
+    user_id UUID NULL REFERENCES auth.users(id), -- Made user_id nullable
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     phone TEXT,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS students (
 -- Instructors table
 CREATE TABLE IF NOT EXISTS instructors (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES auth.users(id),
+    user_id UUID NULL REFERENCES auth.users(id), -- Made nullable
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     phone TEXT,
@@ -34,6 +34,27 @@ CREATE TABLE IF NOT EXISTS instructors (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Trigger to update user_id when auth user is created
+CREATE OR REPLACE FUNCTION set_instructor_user_id()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.user_id IS NULL THEN
+        NEW.user_id := (SELECT id FROM auth.users WHERE email = NEW.email LIMIT 1);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_set_instructor_user_id
+BEFORE UPDATE ON instructors
+FOR EACH ROW
+EXECUTE FUNCTION set_instructor_user_id();
+
+-- Update RLS policy to allow NULL user_id during creation
+CREATE POLICY instructor_null_user_id ON instructors
+    FOR INSERT TO authenticated
+    WITH CHECK (user_id IS NULL OR user_id = auth.uid());
 
 -- Courses table
 CREATE TABLE IF NOT EXISTS courses (

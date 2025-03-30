@@ -1,7 +1,9 @@
 """Admin routes module for the e-learning platform."""
 
-from flask import Blueprint, jsonify, request, render_template, session
+from flask import Blueprint, jsonify, request, render_template, session, current_app
 from app.middleware.auth import require_admin
+from app.services.auth_service import supabase_admin_login
+# Removed: from app.services.auth_service import verify_admin_token 
 from app.services.admin_service import (
     get_dashboard_data_service,
     get_students_service,
@@ -17,23 +19,56 @@ from app.services.admin_service import (
     delete_instructor_service,
     get_course_by_id_service
 )
+from app.services.assignment_service import get_recent_progress
 import logging
-from google.cloud import firestore
-import google.auth.credentials
-from google.cloud.firestore import transactional
+# Removed Firestore/Google Cloud related imports and initialization
+# from google.cloud import firestore
+# import google.auth.credentials
+# from google.cloud.firestore import transactional
 # Specify the path to your service account key file
-SERVICE_ACCOUNT_KEY_FILE = "config/serviceAccountKey.json"  # Replace with your actual path
+# SERVICE_ACCOUNT_KEY_FILE = "config/serviceAccountKey.json"  # Replace with your actual path
 
 # Load credentials explicitly
-try:
-    credentials = google.auth.credentials.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_KEY_FILE
-    )
-except Exception as e:
-    print(f"Error loading credentials: {e}")
+# try:
+#     credentials = google.auth.credentials.Credentials.from_service_account_file(
+#         SERVICE_ACCOUNT_KEY_FILE
+#     )
+# except Exception as e:
+#     print(f"Error loading credentials: {e}")
 logger = logging.getLogger(__name__)
-db = firestore.Client()
+# db = firestore.Client() # Removed Firestore client initialization
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+@admin_bp.route('/api/login', methods=['POST'])
+def admin_login():
+    """Handle admin login requests."""
+    try:
+        data = request.get_json()
+        if not data or 'email' not in data or 'password' not in data:
+            return jsonify({
+                'error': 'Email and password are required'
+            }), 400
+
+        # Use existing supabase_admin_login function
+        auth_result = supabase_admin_login(data['email'], data['password'])
+        
+        return jsonify({
+            'success': True,
+            'token': auth_result['uid'],  # Using uid as token
+            'user': {
+                'email': auth_result['email'],
+                'isAdmin': auth_result['isAdmin']
+            }
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            'error': str(e)
+        }), 401
+    except Exception as e:
+        return jsonify({
+            'error': f'Login failed: {str(e)}'
+        }), 500
 
 @admin_bp.route('/dashboard')
 @require_admin
@@ -44,14 +79,30 @@ def admin_dashboard():
 @admin_bp.route('/students')
 @require_admin
 def admin_students():
-    """Render the student management page."""
-    return render_template('admin/students.html')
+    """Render the student management page with Supabase credentials."""
+    supabase_url = current_app.config.get('SUPABASE_URL')
+    supabase_key = current_app.config.get('SUPABASE_KEY')
+    return render_template('admin/students.html',
+                           supabase_url=supabase_url,
+                           supabase_key=supabase_key)
 
 @admin_bp.route('/courses')
 @require_admin
 def admin_courses():
     """Render the course management page."""
     return render_template('admin/courses.html')
+
+@admin_bp.route('/assignments')
+@require_admin
+def admin_assignments():
+    """Render the main assignments management page."""
+    return render_template('admin/assignments.html')
+
+@admin_bp.route('/courses/<course_id>/assignments')
+@require_admin
+def course_assignments(course_id):
+    """Render the assignments management page for a course."""
+    return render_template('admin/assignments.html', course_id=course_id)
 
 @admin_bp.route('/instructors')
 @require_admin
@@ -69,6 +120,52 @@ def get_dashboard_data():
     except Exception as e:
         logger.error(f"Error getting dashboard data: {str(e)}")
         return jsonify({'error': 'حدث خطأ أثناء جلب بيانات لوحة التحكم'}), 500
+
+@admin_bp.route('/api/assignments/recent')
+@require_admin
+def recent_assignments():
+    """Get recent assignments for dashboard."""
+    try:
+        supabase = get_supabase_client()
+        response = supabase.from_('assignments') \
+            .select('*, courses(title)') \
+            .order('created_at', desc=True) \
+            .limit(10) \
+            .execute()
+        
+        assignments = [{
+            **a,
+            'course_title': a['courses']['title'] if a['courses'] else 'غير معروف'
+        } for a in response.data]
+        
+        return jsonify(assignments)
+    except Exception as e:
+        logger.error(f"Error getting recent assignments: {str(e)}")
+        return jsonify({'error': 'Failed to get assignments'}), 500
+
+@admin_bp.route('/api/progress/recent')
+@require_admin
+def recent_progress():
+    """Get recent student progress for dashboard."""
+    try:
+        supabase = get_supabase_client()
+        response = supabase.from_('course_progress') \
+            .select('*, students(name), courses(title)') \
+            .order('last_accessed', desc=True) \
+            .limit(10) \
+            .execute()
+        
+        progress = [{
+            'student_name': p['students']['name'] if p['students'] else 'غير معروف',
+            'course_title': p['courses']['title'] if p['courses'] else 'غير معروف',
+            'progress_percentage': p['progress_percentage'],
+            'completed': p['completed']
+        } for p in response.data]
+        
+        return jsonify(progress)
+    except Exception as e:
+        logger.error(f"Error getting recent progress: {str(e)}")
+        return jsonify({'error': 'Failed to get progress data'}), 500
 
 @admin_bp.route('/api/students')
 @require_admin
@@ -130,38 +227,42 @@ def delete_student(student_id):
 @require_admin
 def get_student(student_id):
     """Get a specific student by ID."""
-    try:
-        # Get student document
-        student_ref = db.collection('students').document(student_id)
-        student = student_ref.get()
+    # TODO: Refactor this function to use Supabase instead of Firestore
+    # try:
+    #     # Get student document
+    #     student_ref = db.collection('students').document(student_id)
+    #     student = student_ref.get()
         
-        if not student.exists:
-            return jsonify({"error": "Student not found"}), 404
+    #     if not student.exists:
+    #         return jsonify({"error": "Student not found"}), 404
             
-        student_data = student.to_dict()
-        student_data['id'] = student_id
+    #     student_data = student.to_dict()
+    #     student_data['id'] = student_id
         
-        # Get student's enrollments
-        enrollments = db.collection('enrollments').where('student_id', '==', student_id).stream()
+    #     # Get student's enrollments
+    #     enrollments = db.collection('enrollments').where('student_id', '==', student_id).stream()
         
-        # Get course details if student is enrolled
-        for enrollment in enrollments:
-            enrollment_data = enrollment.to_dict()
-            if 'course_id' in enrollment_data:
-                course_ref = db.collection('courses').document(enrollment_data['course_id'])
-                course = course_ref.get()
-                if course.exists:
-                    course_data = course.to_dict()
-                    student_data['course'] = {
-                        'id': enrollment_data['course_id'],
-                        'title': course_data.get('title', 'Unknown Course')
-                    }
-                    break  # We'll just use the first active enrollment for now
+    #     # Get course details if student is enrolled
+    #     for enrollment in enrollments:
+    #         enrollment_data = enrollment.to_dict()
+    #         if 'course_id' in enrollment_data:
+    #             course_ref = db.collection('courses').document(enrollment_data['course_id'])
+    #             course = course_ref.get()
+    #             if course.exists:
+    #                 course_data = course.to_dict()
+    #                 student_data['course'] = {
+    #                     'id': enrollment_data['course_id'],
+    #                     'title': course_data.get('title', 'Unknown Course')
+    #                 }
+    #                 break  # We'll just use the first active enrollment for now
         
-        return jsonify(student_data), 200
-    except Exception as e:
-        logger.error(f"Error getting student: {str(e)}")
-        return jsonify({"error": "Failed to get student"}), 500
+    #     return jsonify(student_data), 200
+    # except Exception as e:
+    #     logger.error(f"Error getting student: {str(e)}")
+    #     return jsonify({"error": "Failed to get student"}), 500
+    logger.warning(f"Route /api/students/{student_id} GET needs refactoring for Supabase")
+    return jsonify({"error": "Endpoint not fully implemented for Supabase yet"}), 501
+
 
 @admin_bp.route('/api/students/<student_id>', methods=['PUT'])
 @require_admin
@@ -212,26 +313,37 @@ def create_course():
         # Log the received data for debugging
         logger.debug(f"Received course data: {data}")
         
-        # Validate required fields
-        required_fields = ['title', 'description', 'instructor_id']
-        missing_fields = [field for field in required_fields if not data.get(field)]
-        
-        # Special handling for price
-        if 'price' not in data:
-            missing_fields.append('price')
-        elif data['price'] is None:  # Check if price is None
-            missing_fields.append('price')
-            
-        if missing_fields:
+        # --- Validation ---
+        # Check required fields (must exist and not be empty strings)
+        required_fields = ['title', 'instructor_id']
+        missing_or_empty = [
+            field for field in required_fields
+            if data.get(field) is None or str(data.get(field)).strip() == ''
+        ]
+        if missing_or_empty:
             return jsonify({
-                "error": f"Missing required fields: {', '.join(missing_fields)}"
+                "error": f"Missing or empty required fields: {', '.join(missing_or_empty)}"
             }), 400
 
-        # Ensure price is a number
-        try:
-            data['price'] = float(data['price'])
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid price value"}), 400
+        # --- Data Processing ---
+        # Handle optional description (default to empty string if missing/None/empty)
+        data['description'] = str(data.get('description', '')).strip()
+
+        # Handle price based on 'type' field and check for empty string
+        if data.get('type') == 'free':
+            data['price'] = 0.0
+        # Check for missing, None, or empty string for price before attempting conversion
+        elif data.get('price') is None or str(data.get('price')).strip() == '':
+             data['price'] = 0.0
+        else:
+             # If not free and price is provided, validate it
+             try:
+                 price_value = float(str(data['price']).strip())
+                 if price_value < 0:
+                      return jsonify({"error": "Price cannot be negative"}), 400
+                 data['price'] = price_value # Assign validated float
+             except (TypeError, ValueError):
+                 return jsonify({"error": "Invalid price value"}), 400
 
         course = create_course_service(data)
         return jsonify(course), 201
@@ -267,26 +379,38 @@ def update_course(course_id):
         # Log the received data for debugging
         logger.debug(f"Received course update data: {data}")
         
-        # Validate required fields
-        required_fields = ['title', 'description', 'instructor_id']
-        missing_fields = [field for field in required_fields if not data.get(field)]
-        
-        # Special handling for price
-        if 'price' not in data:
-            missing_fields.append('price')
-        elif data['price'] is None:  # Check if price is None
-            missing_fields.append('price')
-            
-        if missing_fields:
+        # --- Validation ---
+        # Check required fields (must exist and not be empty strings)
+        required_fields = ['title', 'instructor_id']
+        missing_or_empty = [
+            field for field in required_fields
+            if data.get(field) is None or str(data.get(field)).strip() == ''
+        ]
+        if missing_or_empty:
             return jsonify({
-                "error": f"Missing required fields: {', '.join(missing_fields)}"
+                "error": f"Missing or empty required fields: {', '.join(missing_or_empty)}"
             }), 400
 
-        # Ensure price is a number
-        try:
-            data['price'] = float(data['price'])
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid price value"}), 400
+        # --- Data Processing ---
+        # Handle optional description (default to empty string if missing/None/empty)
+        # Use get with default '' and strip potential whitespace
+        data['description'] = str(data.get('description', '')).strip()
+
+        # Handle price based on 'type' field and check for empty string
+        if data.get('type') == 'free':
+            data['price'] = 0.0
+        # Check for missing, None, or empty string for price before attempting conversion
+        elif data.get('price') is None or str(data.get('price')).strip() == '':
+             data['price'] = 0.0
+        else:
+             # If not free and price is provided, validate it
+             try:
+                 price_value = float(str(data['price']).strip())
+                 if price_value < 0:
+                      return jsonify({"error": "Price cannot be negative"}), 400
+                 data['price'] = price_value # Assign validated float
+             except (TypeError, ValueError):
+                 return jsonify({"error": "Invalid price value"}), 400
 
         course = update_course_service(course_id, data)
         return jsonify(course), 200

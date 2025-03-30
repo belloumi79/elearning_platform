@@ -5,8 +5,8 @@ from datetime import timedelta
 import os
 import secrets
 from dotenv import load_dotenv
-import firebase_admin
-from firebase_admin import credentials
+# Removed: import firebase_admin
+# Removed: from firebase_admin import credentials
 from flask import redirect, url_for
 
 def create_app(config_name=None):
@@ -28,15 +28,7 @@ def create_app(config_name=None):
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-    # Configure Firebase
-    app.config['FIREBASE_CONFIG'] = {
-        'apiKey': os.getenv('FIREBASE_API_KEY'),
-        'authDomain': os.getenv('FIREBASE_AUTH_DOMAIN'),
-        'projectId': os.getenv('FIREBASE_PROJECT_ID'),
-        'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET'),
-        'messagingSenderId': os.getenv('FIREBASE_MESSAGING_SENDER_ID'),
-        'appId': os.getenv('FIREBASE_APP_ID')
-    }
+    # Removed Firebase config block
 
     # Initialize extensions
     Session(app)
@@ -70,28 +62,25 @@ def create_app(config_name=None):
     from config.logging_config import init_logging
     init_logging()
 
-    # Initialize Firebase Admin SDK
-    cred_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'serviceAccountKey.json')
-    if not firebase_admin._apps:
-        try:
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred, {
-                'projectId': os.getenv('FIREBASE_PROJECT_ID', 'iqrawartaki-af01c'),
-                'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET', 'iqrawartaki-af01c.appspot.com')
-            })
-            app.logger.info("Firebase Admin SDK initialized successfully")
-        except Exception as e:
-            app.logger.error(f"Error initializing Firebase Admin SDK: {str(e)}")
-            raise
+    # Removed Firebase Admin SDK initialization block
+
+    # Handle favicon requests
+    @app.route('/favicon.ico')
+    def favicon():
+        return app.send_static_file('favicon.ico') if os.path.exists(os.path.join(app.static_folder, 'favicon.ico')) else ('', 204)
 
     # Register blueprints
     from app.routes.admin import admin_bp
     from app.routes.auth import auth_bp
     from app.routes.courses import courses_bp
+    from app.routes.assignments import assignments_bp
+    from app.routes.student import student_bp
 
     app.register_blueprint(admin_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
+    app.register_blueprint(assignments_bp)
+    app.register_blueprint(student_bp)
 
     @app.route('/')
     def index():

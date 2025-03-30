@@ -15,7 +15,6 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-
 def require_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):

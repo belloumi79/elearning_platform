@@ -1,0 +1,32 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/student/dashboard">منصة إقرأ و ارتق</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/student/dashboard">لوحة التحكم</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/student/assignments">الواجبات</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/student/courses">دوراتي</a>
+                </li>
+            </ul>
+            <button class="btn btn-outline-light" onclick="logout()">تسجيل الخروج</button>
+        </div>
+    </div>
+</nav>
+
+<script>
+    function logout() {
+        fetch('/student/logout', {
+            method: 'POST'
+        }).then(() => {
+            window.location.href = '/';
+        });
+    }
+</script>

@@ -6,19 +6,43 @@ admin login, logout, and token verification.
 
 Routes:
     - /admin/login: Admin login page
-    - /api/admin/verify: Verify admin token and create session
+    - /admin/login: Admin login page (renders template)
+    - /api/admin/login: Handle admin login using email/password (Supabase)
     - /admin/logout: Clear admin session
-    - /setup/admin/<email>: Create initial admin user (for setup only)
+    # - /setup/admin/<email>: Create initial admin user (Firebase - REMOVED)
+    # - /api/signup: User signup (Firebase - REMOVED)
+    # - /api/user/profile/<uid>: Get user profile (Firebase - NEEDS REFACTOR)
 """
 
 from flask import Blueprint, jsonify, request, render_template, session, current_app
-from firebase_admin import auth, firestore
+# Removed Firebase imports: from firebase_admin import auth, firestore
+# Initialize Supabase client directly
+import os
+from supabase import create_client, Client
 import secrets
 import logging
 from datetime import datetime
-from app.models.user import User
+# Removed: from app.models.user import User # Assuming User model might change or be unused with Supabase auth
 
 logger = logging.getLogger(__name__)
+
+# Initialize Supabase client (similar to auth_service.py and middleware/auth.py)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") # Use service key if needed for admin actions, otherwise ANON_KEY
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    # Use ANON_KEY as fallback if service key isn't strictly needed for login check
+    SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise ValueError("Supabase URL and Anon or Service key must be set in environment variables.")
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    logger.warning("Using Supabase Anon Key for auth routes. Service Key might be required for admin operations.")
+else:
+    # Prefer service key if available, might be needed later
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    logger.info("Using Supabase Service Key for auth routes.")
+
+
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/admin/login')
@@ -26,162 +50,77 @@ def admin_login():
     """Render admin login page."""
     return render_template('admin/login.html')
 
-@auth_bp.route('/api/admin/verify', methods=['POST'])
-def verify_admin():
-    """Verify Firebase ID token and create admin session.
-    
-    Request body must contain:
-        - idToken: Firebase ID token
-        
-    Returns:
-        JSON response with:
-            - success: bool
-            - error: str (if success is False)
-    """
+@auth_bp.route('/api/admin/login', methods=['POST']) # Renamed from /verify
+def api_admin_login():
+    """Handle admin login using email/password with Supabase."""
     try:
-        # Get ID token from request
-        id_token = request.json.get('idToken')
-        if not id_token:
-            raise ValueError("No ID token provided")
-            
-        # Verify token and admin status
-        from app.services.auth_service import verify_admin_token
-        user_data = verify_admin_token(id_token)
-        
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            raise ValueError("Email and password are required")
+
+        # Call Supabase login function (to be implemented in auth_service)
+        # This service function should also verify if the user is an admin
+        from app.services.auth_service import supabase_admin_login
+        user_data = supabase_admin_login(email, password) # This needs to return necessary user info for session
+
         # Create session
-        session['user'] = user_data
-        session['csrf_token'] = secrets.token_hex(32)
-        
+        session['user'] = user_data # Store relevant Supabase user info (e.g., id, email, role)
+        session['csrf_token'] = secrets.token_hex(32) # Keep CSRF token for form protection
+
+        # Return success and potentially the CSRF token if needed by frontend JS
         return jsonify({
             'success': True,
-            'csrfToken': session['csrf_token']
+            'message': 'Login successful',
+            'csrfToken': session['csrf_token'] # Optional: only if frontend needs it explicitly
         })
-        
+
     except Exception as e:
-        logger.error(f"Admin verification failed: {str(e)}")
+        logger.error(f"Admin login failed: {str(e)}")
+        # Provide a generic error message for security
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Invalid credentials or user is not an admin.'
         }), 401
 
-@auth_bp.route('/setup/admin/<email>')
-def setup_admin(email):
-    """Create initial admin user.
-    This route should only be used once during initial setup.
-    """
-    try:
-        logger.info(f"Setting up admin user for email: {email}")
-        
-        # Get user by email
-        try:
-            user = auth.get_user_by_email(email)
-            logger.info(f"Found user: {user.uid}")
-        except Exception as e:
-            logger.error(f"Error finding user: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f"User not found: {str(e)}"
-            }), 404
-        
-        # Set admin custom claim
-        try:
-            auth.set_custom_user_claims(user.uid, {'admin': True})
-            logger.info(f"Set admin claim for user: {user.uid}")
-        except Exception as e:
-            logger.error(f"Error setting admin claim: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f"Failed to set admin claim: {str(e)}"
-            }), 500
-        
-        # Create admin document in Firestore
-        try:
-            db = firestore.client()
-            admin_ref = db.collection('admins').document(user.uid)
-            admin_ref.set({
-                'email': email,
-                'created_at': datetime.utcnow(),
-                'uid': user.uid
-            })
-            logger.info(f"Created admin document for user: {user.uid}")
-        except Exception as e:
-            logger.error(f"Error creating admin document: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f"Failed to create admin document: {str(e)}"
-            }), 500
-        
-        return jsonify({
-            'success': True,
-            'message': f'Successfully set up admin user: {email}',
-            'uid': user.uid
-        })
-    except Exception as e:
-        logger.error(f"Failed to set up admin user: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+
+# @auth_bp.route('/setup/admin/<email>') # Firebase specific - Removed
+# def setup_admin(email):
+#     """Create initial admin user. (Firebase version - REMOVED)"""
+#     # ... (Firebase code removed) ...
+#     pass
+
 
 @auth_bp.route('/admin/logout')
 def admin_logout():
     """Clear the admin session."""
     session.clear()
-    return jsonify({'success': True})
+    # Redirect to login page after logout might be better UX
+    # from flask import redirect, url_for
+    # return redirect(url_for('auth.admin_login')) 
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
 
-@auth_bp.route('/api/signup', methods=['POST'])
-def signup():
-    """Sign up a new user with Gmail using Firebase ID token.
 
-    Request body must contain:
-        - idToken: Firebase ID token
+# @auth_bp.route('/api/signup', methods=['POST']) # Firebase specific - Removed
+# def signup():
+#     """Sign up a new user. (Firebase version - REMOVED)"""
+#     # ... (Firebase code removed) ...
+#     pass
 
-    Returns:
-        JSON response with:
-            - success: bool
-            - uid: str (if success is True)
-            - error: str (if success is False)
-    """
-    try:
-        # Get ID token from request
-        id_token = request.json.get('idToken')
-        if not id_token:
-            raise ValueError("No ID token provided")
 
-        # Sign up user with Gmail
-        from app.services.auth_service import signup_with_gmail
-        uid = signup_with_gmail(id_token)
-
-        return jsonify({
-            'success': True,
-            'uid': uid
-        })
-
-    except Exception as e:
-        logger.error(f"Signup failed: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 400
-
-@auth_bp.route('/api/user/profile/<uid>', methods=['GET'])
-def get_user_profile_route(uid):
-    """
-    Get user profile and enrolled courses.
-
-    Args:
-        uid (str): User ID
-
-    Returns:
-        JSON response with user profile and enrolled courses
-    """
-    try:
-        from app.services.auth_service import get_user_profile
-        user_profile = get_user_profile(uid)
-        return jsonify(user_profile)
-    except Exception as e:
-        logger.error(f"Error fetching user profile: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# @auth_bp.route('/api/user/profile/<uid>', methods=['GET']) # Needs refactoring for Supabase
+# def get_user_profile_route(uid):
+#     """Get user profile. (Needs refactoring for Supabase)"""
+#     # try:
+#     #     from app.services.auth_service import get_user_profile_supabase
+#     #     user_profile = get_user_profile_supabase(uid)
+#     #     return jsonify(user_profile)
+#     # except Exception as e:
+#     #     logger.error(f"Error fetching user profile: {str(e)}")
+#     #     return jsonify({
+#     #         'success': False,
+#     #         'error': str(e)
+#     #     }), 500
+#     return jsonify({"message": "Route needs refactoring for Supabase"}), 501

@@ -12,12 +12,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+# Use Service Role Key for backend database operations
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") 
 
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    raise ValueError("Supabase URL and Anon key must be set in environment variables.")
+if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    raise ValueError("Supabase URL and Service Role Key must be set in environment variables for database module.")
 
-supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+# Initialize client with Service Role Key
+supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+logger.info("Supabase client initialized with Service Role Key.")
 
 def get_supabase_client():
     return supabase_client

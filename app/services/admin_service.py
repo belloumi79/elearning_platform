@@ -37,22 +37,26 @@ logger = logging.getLogger(__name__)
 def get_dashboard_data_service():
     """Get statistics and data for the admin dashboard."""
     try:
-        supabase_client = get_supabase_client()
+        supabase_client = get_supabase_client() # Uses Service Key now
 
-        # Get counts using supabase
-        students_count_res = supabase_client.from_('students').select('*', count='exact').execute()
-        courses_count_res = supabase_client.from_('courses').select('*', count='exact').execute()
-        instructors_count_res = supabase_client.from_('instructors').select('*', count='exact').execute()
+        # Get counts using supabase - select only 'id' for counting
+        students_count_res = supabase_client.from_('students').select('id', count='exact').execute()
+        courses_count_res = supabase_client.from_('courses').select('id', count='exact').execute()
+        instructors_count_res = supabase_client.from_('instructors').select('id', count='exact').execute()
 
-        total_students = students_count_res.count
-        total_instructors = instructors_count_res.count
+        # Safely access count attribute
+        total_students = students_count_res.count if hasattr(students_count_res, 'count') else 0
+        total_courses = courses_count_res.count if hasattr(courses_count_res, 'count') else 0
+        total_instructors = instructors_count_res.count if hasattr(instructors_count_res, 'count') else 0
+
 
         # Get recent activities (last 5 items) using supabase
         recent_students_res = supabase_client.from_('students').select('*').order('created_at', desc=True).limit(5).execute()
         recent_courses_res = supabase_client.from_('courses').select('*').order('created_at', desc=True).limit(5).execute()
 
-        recent_students = recent_students_res.data
-        recent_courses = recent_courses_res.data
+        # Safely access data attribute
+        recent_students = recent_students_res.data if recent_students_res.data else []
+        recent_courses = recent_courses_res.data if recent_courses_res.data else []
 
         return {
             'statistics': {
@@ -75,13 +79,23 @@ def get_students_service():
         supabase_client = get_supabase_client()
         students = []
         try:
+            # Use LEFT join to include students without enrollments
+            # Select specific columns for clarity and potentially better performance
             response = supabase_client.from_('students').select(
-                '*, enrollments!inner(courses(id, title))'
+                'id, name, email, phone, status, created_at, enrollments!left(id, courses!inner(id, title))'
             ).execute()
 
-            if response.error:
-                raise Exception(response.error.message)
-            
+            # Proper error check for Supabase v2+ (assuming execute raises on HTTP error)
+            # No explicit 'response.error' check needed here usually, but check data
+            if response.data is None:
+                 # This might indicate an issue, log it. Actual errors should raise exceptions.
+                 logger.warning("Supabase query for students returned None data.")
+                 # Handle potential errors if the library doesn't raise them
+                 if hasattr(response, 'error') and response.error:
+                      raise Exception(f"Supabase error: {response.error.message}")
+                 # If no error but None data, return empty list
+                 return []
+
             students_data = response.data
             
             for student_data in students_data:
@@ -91,15 +105,27 @@ def get_students_service():
                     'email': student_data['email'],
                     'phone': student_data['phone'],
                     'status': student_data['status'],
-                    'created_at': student_data['created_at'],
+                    'created_at': student_data.get('created_at'), # Use .get for safety
                 }
                 
-                if student_data['enrollments'] and student_data['enrollments'][0]['courses']:
-                    student['course'] = {
-                        'id': student_data['enrollments'][0]['courses']['id'],
-                        'title': student_data['enrollments'][0]['courses']['title']
-                    }
+                # Safely access nested data
+                enrollments = student_data.get('enrollments', [])
+                if enrollments:
+                    # Check if the first enrollment has a course linked (inner join on courses means it should if enrollment exists)
+                    first_enrollment = enrollments[0]
+                    course_data = first_enrollment.get('courses')
+                    if course_data:
+                         student['course'] = {
+                             'id': course_data.get('id'),
+                             'title': course_data.get('title')
+                         }
+                    else:
+                         student['course'] = None # No course linked to the first enrollment found
+                else:
+                    student['course'] = None # No enrollments found for the student
+
                 students.append(student)
+                
             return students
         except Exception as e:
             logger.error(f"Error querying students from Supabase: {e}")
@@ -117,71 +143,68 @@ def create_student_service(data):
         if missing_fields:
             raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
-        # Validate course_id if provided
-        course_id = data.get('course_id')
-        course_data = None
-        if course_id:
+        supabase_client = get_supabase_client()
+        
+        # Prepare student data
+        student_data = {
+            'name': data['name'],
+            'email': data['email'],
+            'phone': data['phone'],
+            'status': 'active',
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+
+        # Insert student - use single() to ensure we get exactly one record back
+        response = supabase_client.from_('students').insert(student_data).select('*').single().execute()
+        
+        # Check for errors
+        if hasattr(response, 'error') and response.error:
+            raise Exception(response.error.message)
+            
+        if not hasattr(response, 'data') or not response.data:
+            raise Exception("No data returned after student creation")
+            
+        created_student = response.data
+        
+        # Handle course enrollment if provided
+        if 'course_id' in data:
             try:
-                supabase_client = get_supabase_client()
-                response = supabase_client.from_('courses').select('*').eq('id', course_id).execute()
-                if not response.data:
+                # Verify course exists
+                course_response = supabase_client.from_('courses').select('title').eq('id', data['course_id']).execute()
+                if not course_response.data:
                     raise ValueError("Invalid course_id")
-                course_data = response.data[0]
-            except Exception as e:
-                logger.error(f"Error validating course: {str(e)}")
-                raise ValueError("Invalid course_id")
-
-        # Create student document with transaction to ensure atomicity
-        def create_student_in_transaction():
-            supabase_client = get_supabase_client()
-            student_data = {
-                'name': data['name'],
-                'email': data['email'],
-                'phone': data['phone'],
-                'created_at': datetime.utcnow().isoformat(),
-                'updated_at': datetime.utcnow().isoformat(),
-                'status': 'active'
-            }
-
-            response_student = supabase_client.from_('students').insert(student_data).execute()
-            if response_student.error:
-                raise Exception(response_student.error.message)
-            student_record = response_student.data[0]
-
-            student_id = student_record['id']
-
-            # If course_id is provided, create enrollment
-            if course_id and course_data:
+                    
+                course_title = course_response.data[0].get('title', 'Unknown Course')
+                
+                # Create enrollment
                 enrollment_data = {
-                    'student_id': student_id,
-                    'course_id': course_id,
+                    'student_id': created_student['id'],
+                    'course_id': data['course_id'],
                     'enrolled_at': datetime.utcnow().isoformat(),
                     'status': 'active',
-                    'course_title': course_data.get('title', 'Unknown Course')
+                    'course_title': course_title
                 }
-                response_enrollment = supabase_client.from_('enrollments').insert(enrollment_data).execute()
-                if response_enrollment.error:
-                    raise Exception(response_enrollment.error.message)
-
-                # Add course information to student data
-                student_data['course'] = {
-                    'id': course_id,
-                    'title': course_data.get('title', 'Unknown Course')
+                
+                enrollment_response = supabase_client.from_('enrollments').insert(enrollment_data).execute()
+                if enrollment_response.error:
+                    raise Exception(enrollment_response.error.message)
+                    
+                # Add course info to student response
+                created_student['course'] = {
+                    'id': data['course_id'],
+                    'title': course_title
                 }
+                
+            except Exception as e:
+                logger.warning(f"Course enrollment failed but student created: {str(e)}")
+                # Student was created successfully even if enrollment failed
 
-            return student_id, student_data
-
-        # Execute transaction
-        student_id, student_data = create_student_in_transaction()
-        
-        # Return created student data
-        created_student = student_data.copy()
-        created_student['id'] = student_id
         return created_student
 
     except ValueError as e:
         logger.error(f"Validation error in create_student_service: {str(e)}")
-        raise ValueError(f"Validation error creating student: {str(e)}")
+        raise
     except Exception as e:
         logger.error(f"Error creating student: {str(e)}")
         raise RuntimeError(f"Failed to create student: {str(e)}")
@@ -301,9 +324,9 @@ def get_courses_service():
     """Get list of all courses."""
     try:
         supabase_client = get_supabase_client()
+        # Execute the query. If there's an HTTP error, execute() should raise it.
         response = supabase_client.from_('courses').select('*').execute()
-        if response.error:
-            raise Exception(response.error.message)
+        # No need to check response.error explicitly in newer versions
         return response.data
     except Exception as e:
         logger.error(f"Error getting courses: {str(e)}")
@@ -312,36 +335,43 @@ def get_courses_service():
 def create_course_service(data):
     """Create a new course."""
     try:
-        # Validate required fields
-        required_fields = ['title', 'description', 'instructor_id', 'price']
+        # Validation for title and instructor_id (description/price handled in route)
+        required_fields = ['title', 'instructor_id']
         missing_fields = [field for field in required_fields if not data.get(field)]
         if missing_fields:
             raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
-        # Validate price is a number
-        try:
-            float(data['price'])
-        except ValueError:
-            raise ValueError("Price must be a number")
-
         supabase_client = get_supabase_client()
-        
+
+        # Verify instructor_id exists before proceeding
+        try:
+            instructor_check = supabase_client.from_('instructors').select('id').eq('id', data['instructor_id']).maybe_single().execute()
+            if not instructor_check.data:
+                 raise ValueError(f"Instructor with ID {data['instructor_id']} not found.")
+        except Exception as ie:
+             # Catch potential errors during the check itself
+             logger.error(f"Error checking instructor ID {data['instructor_id']}: {str(ie)}")
+             raise ValueError(f"Failed to verify instructor ID: {str(ie)}")
+
+
         # Prepare course data
         course_data = {
             'title': data['title'],
-            'description': data['description'],
+            'description': data.get('description', ''), # Use validated/defaulted value
             'instructor_id': data['instructor_id'],
-            'price': float(data['price']),
+            'price': data['price'], # Use validated/defaulted float value
             'created_at': datetime.utcnow().isoformat(),
             'updated_at': datetime.utcnow().isoformat()
         }
 
         # Create course
-        response = supabase_client.from_('courses').insert(course_data).execute()
-        if response.error:
-            raise Exception(response.error.message)
-            
-        return response.data[0]
+        # Execute the insert. If there's an HTTP error, execute() should raise it.
+        supabase_client.from_('courses').insert(course_data).execute()
+
+        # If execute() did not raise an error, assume success.
+        # Return the data that was intended for insertion.
+        # Note: This won't include the database-generated 'id'.
+        return course_data
 
     except ValueError as e:
         logger.error(f"Validation error in create_course_service: {str(e)}")
@@ -354,12 +384,12 @@ def get_course_by_id_service(course_id):
     """Get a specific course by ID."""
     try:
         supabase_client = get_supabase_client()
-        response = supabase_client.from_('courses').select('*').eq('id', course_id).execute()
-        if response.error:
-            raise Exception(response.error.message)
+        # Use maybe_single() to fetch zero or one record directly
+        response = supabase_client.from_('courses').select('*').eq('id', course_id).maybe_single().execute()
+        # execute() will raise an exception on HTTP error in newer clients
         if not response.data:
             raise ValueError("Course not found")
-        return response.data[0]
+        return response.data # maybe_single() returns the dict directly, or None
     except ValueError as e:
         logger.error(f"Course not found: {str(e)}")
         raise
@@ -370,16 +400,23 @@ def update_course_service(course_id, data):
     """Update an existing course."""
     try:
         # Validate required fields
-        required_fields = ['title', 'description', 'instructor_id', 'price']
+        required_fields = ['title', 'instructor_id', 'type']
         missing_fields = [field for field in required_fields if not data.get(field)]
         if missing_fields:
             raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
-        # Validate price is a number
-        try:
-            float(data['price'])
-        except ValueError:
-            raise ValueError("Price must be a number")
+        # Validate type
+        if data['type'] not in ['free', 'paid']:
+            raise ValueError("Invalid course type - must be 'free' or 'paid'")
+
+        # Validate price based on type
+        if data['type'] == 'paid':
+            if 'price' not in data:
+                raise ValueError("Price is required for paid courses")
+            try:
+                float(data['price'])
+            except ValueError:
+                raise ValueError("Price must be a number")
 
         supabase_client = get_supabase_client()
         
@@ -393,16 +430,21 @@ def update_course_service(course_id, data):
         }
 
         # Update course
-        response = supabase_client.from_('courses').update(update_data).eq('id', course_id).execute()
-        if response.error:
-            raise Exception(response.error.message)
-            
-        # Get updated course data
-        course_response = supabase_client.from_('courses').select('*').eq('id', course_id).execute()
+        # Execute the update. If there's an HTTP error, execute() should raise it.
+        supabase_client.from_('courses').update(update_data).eq('id', course_id).execute()
+        # No need to check response.error explicitly
+
+        # Get updated course data with all fields including type
+        course_response = supabase_client.from_('courses').select('*').eq('id', course_id).maybe_single().execute()
         if not course_response.data:
             raise ValueError("Course not found after update")
+
+        # Ensure type field is included, default to 'paid' if missing for backward compatibility
+        course_data = course_response.data
+        if 'type' not in course_data:
+            course_data['type'] = 'paid' if float(course_data.get('price', 0)) > 0 else 'free'
             
-        return course_response.data[0]
+        return course_data
 
     except ValueError as e:
         logger.error(f"Validation error in update_course_service: {str(e)}")
@@ -422,10 +464,10 @@ def delete_course_service(course_id):
             raise ValueError(f"Course with ID {course_id} not found")
             
         # Delete course
-        delete_response = supabase_client.from_('courses').delete().eq('id', course_id).execute()
-        if delete_response.error:
-            raise Exception(delete_response.error.message)
-            
+        # Execute the delete. If there's an HTTP error, execute() should raise it.
+        supabase_client.from_('courses').delete().eq('id', course_id).execute()
+        # No need to check delete_response.error explicitly
+
     except ValueError as e:
         logger.error(f"Error deleting course: {str(e)}")
         raise
@@ -437,11 +479,12 @@ def get_instructors_service():
     """Get list of all instructors."""
     try:
         supabase_client = get_supabase_client()
+        # Execute the query. If there's an HTTP error, execute() should raise it.
         response = supabase_client.from_('instructors').select('*').execute()
-        if response.error:
-            raise Exception(response.error.message)
+        # No need to check response.error explicitly in newer versions
         return response.data
     except Exception as e:
+        # Log the specific error from Supabase or the client library
         logger.error(f"Error getting instructors: {str(e)}")
         raise RuntimeError(f"Failed to get instructors: {str(e)}")
 
@@ -456,27 +499,72 @@ def create_instructor_service(data):
 
         supabase_client = get_supabase_client()
         
-        # Prepare instructor data
-        instructor_data = {
-            'name': data['name'],
-            'email': data['email'],
-            'phone': data['phone'],
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat()
-        }
+        # 1. First create auth user
+        try:
+            # Vérifier d'abord si l'email existe déjà
+            existing = supabase_client.from_('instructors').select('email').eq('email', data['email']).execute()
+            if existing.data and len(existing.data) > 0:
+                raise ValueError(f"L'email {data['email']} existe déjà")
 
-        # Create instructor
-        response = supabase_client.from_('instructors').insert(instructor_data).execute()
-        if response.error:
-            raise Exception(response.error.message)
+            # Créer l'utilisateur auth
+            auth_response = supabase_client.auth.sign_up({
+                "email": data['email'],
+                "password": data['password'],
+                "options": {
+                    "data": {
+                        'name': data['name'],
+                        'role': 'instructor'
+                    }
+                }
+            })
             
-        # TODO: Handle password creation through auth service
-        # This will need to be coordinated with the auth system
-        
-        return response.data[0]
+            if not auth_response.user:
+                raise Exception("La création du compte a échoué - aucun utilisateur retourné")
+
+            try:
+                # Créer l'enregistrement instructeur
+                instructor_data = {
+                    'name': data['name'],
+                    'email': data['email'],
+                    'phone': data['phone'],
+                    'user_id': auth_response.user.id,
+                    'status': data.get('status', 'active'),
+                    'created_at': datetime.utcnow().isoformat(),
+                    'updated_at': datetime.utcnow().isoformat()
+                }
+
+                # Insert instructor data
+                insert_response = supabase_client.from_('instructors').insert(instructor_data).execute()
+
+                # Check for insert errors (v2 raises exceptions, but explicit check is safer)
+                if hasattr(insert_response, 'error') and insert_response.error:
+                     raise Exception(f"Erreur Supabase lors de l'insertion: {insert_response.error.message}")
+
+                # Select the newly created instructor data using user_id
+                select_response = supabase_client.from_('instructors').select('*').eq('user_id', auth_response.user.id).single().execute()
+
+                if hasattr(select_response, 'error') and select_response.error:
+                    # If select fails, something is wrong, potentially rollback auth user? (Already handled in outer except)
+                    raise Exception(f"Erreur Supabase lors de la sélection post-insertion: {select_response.error.message}")
+
+                if not select_response.data:
+                    # This shouldn't happen if insert succeeded and user_id is correct
+                    raise Exception("Impossible de retrouver l'instructeur après création.")
+
+                return select_response.data
+
+            except Exception as e:
+                # Nettoyage en cas d'erreur
+                supabase_client.auth.admin.delete_user(auth_response.user.id)
+                logger.error(f"Erreur création instructeur: {str(e)}")
+                raise RuntimeError("Échec de la création de l'instructeur dans la base de données")
+
+        except Exception as auth_error:
+            logger.error(f"Auth user creation failed: {str(auth_error)}")
+            raise Exception(f"Failed to create auth user: {str(auth_error)}")
 
     except ValueError as e:
-        logger.error(f"Validation error in create_instructor_service: {str(e)}")
+        logger.warning(f"Validation error: {str(e)}")
         raise
     except Exception as e:
         logger.error(f"Error creating instructor: {str(e)}")

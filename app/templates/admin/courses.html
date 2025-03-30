@@ -232,10 +232,12 @@
                 columns: [
                     { data: 'title' },
                     { data: 'description' },
-                    { 
+                    {
                         data: 'type',
-                        render: function(data) {
-                            return data === 'free' ? 'مجانية' : 'مدفوعة';
+                        render: function(data, type, row) {
+                            // Ensure we use the type field if available, otherwise fallback to price
+                            const courseType = data || (row.price > 0 ? 'paid' : 'free');
+                            return courseType === 'free' ? 'مجانية' : 'مدفوعة';
                         }
                     },
                     { 
@@ -268,6 +270,12 @@
                             return `
                                 <button class="btn btn-sm btn-primary" onclick="editCourse('${data.id}')">
                                     تعديل
+                                </button>
+                                <button class="btn btn-sm btn-info" onclick="window.location.href='/admin/courses/${data.id}/assignments'">
+                                    الواجبات
+                                </button>
+                                <button class="btn btn-sm btn-success" onclick="window.location.href='/admin/courses/${data.id}/assignments/new'">
+                                    إضافة واجب
                                 </button>
                                 <button class="btn btn-sm btn-danger" onclick="deleteCourse('${data.id}')">
                                     حذف
@@ -336,10 +344,23 @@
                 document.getElementById('editCourseId').value = course.id;
                 document.getElementById('editCourseTitle').value = course.title;
                 document.getElementById('editCourseDescription').value = course.description;
+                // Always use the course.type if available, only fallback to price-based detection if missing
                 document.getElementById('editCourseType').value = course.type || (course.price > 0 ? 'paid' : 'free');
                 document.getElementById('editCoursePrice').value = course.price;
                 document.getElementById('editCourseInstructorId').value = course.instructor_id;
                 document.getElementById('editCourseState').value = course.state;
+                
+                // Ensure Arabic text is displayed for the selected type
+                const typeSelect = document.getElementById('editCourseType');
+                if (typeSelect) {
+                    const options = typeSelect.options;
+                    for (let i = 0; i < options.length; i++) {
+                        if (options[i].value === (course.type || (course.price > 0 ? 'paid' : 'free'))) {
+                            options[i].selected = true;
+                            break;
+                        }
+                    }
+                }
                 
                 // Update price field state
                 togglePriceField('editCourseType', 'editCoursePrice');
