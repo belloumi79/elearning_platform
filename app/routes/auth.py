@@ -67,10 +67,12 @@ def api_admin_login():
         user_data = supabase_admin_login(email, password) # This needs to return necessary user info for session
 
         # Create session
-        session['user'] = user_data # Store relevant Supabase user info (e.g., id, email, role)
+        session['user'] = {'id': user_data['uid'], 'isAdmin': user_data['isAdmin']} # Store relevant Supabase user info (e.g., id, isAdmin)
         session['csrf_token'] = secrets.token_hex(32) # Keep CSRF token for form protection
+        session['access_token'] = user_data['access_token']
+        session['refresh_token'] = user_data['refresh_token']
 
-        # Return success and potentially the CSRF token if needed by frontend JS
+        # Return success and the access token
         return jsonify({
             'success': True,
             'message': 'Login successful',
@@ -79,11 +81,23 @@ def api_admin_login():
 
     except Exception as e:
         logger.error(f"Admin login failed: {str(e)}")
-        # Provide a generic error message for security
+        # Provide slightly more specific error messages based on the exception type
+        error_message = 'An unexpected error occurred during login.'
+        status_code = 500
+        if isinstance(e, ValueError):
+            # Specific messages from auth_service for credential/admin issues
+            error_message = str(e)
+            status_code = 401 # Unauthorized or Forbidden (depending on exact meaning)
+        elif "Invalid email or password" in str(e): # Catch potential generic Supabase auth error string
+             error_message = "Invalid email or password."
+             status_code = 401
+        # Keep logging the detailed error server-side
+        # logger.error(f"Admin login failed: {str(e)}") # Already logged in auth_service
+
         return jsonify({
             'success': False,
-            'error': 'Invalid credentials or user is not an admin.'
-        }), 401
+            'error': error_message
+        }), status_code
 
 
 # @auth_bp.route('/setup/admin/<email>') # Firebase specific - Removed
@@ -99,8 +113,7 @@ def admin_logout():
     session.clear()
     # Redirect to login page after logout might be better UX
     # from flask import redirect, url_for
-    # return redirect(url_for('auth.admin_login')) 
-    return jsonify({'success': True, 'message': 'Logged out successfully'})
+    # return jsonify({'success': True, 'message': 'Logged out successfully'})
 
 
 # @auth_bp.route('/api/signup', methods=['POST']) # Firebase specific - Removed

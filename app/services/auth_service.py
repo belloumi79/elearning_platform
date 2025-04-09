@@ -71,12 +71,14 @@ def supabase_admin_login(email, password):
                     return {
                         'uid': uid,
                         'email': user.email,
-                        'isAdmin': True 
+                        'isAdmin': True,
+                        'access_token': response.session.access_token,
+                        'refresh_token': response.session.refresh_token
                     }
                 else:
                     logger.warning(f"User {uid} authenticated but is not an admin.")
                     # Sign out the user as they are not authorized for the admin panel
-                    supabase.auth.sign_out() 
+                    supabase.auth.sign_out()
                     raise ValueError("User is not authorized as admin.")
             except Exception as db_error:
                 logger.error(f"Error checking admin status in Supabase table 'admins': {str(db_error)}")

@@ -7,11 +7,15 @@ def init_logging():
     # Create logs directory if not exists
     if not os.path.exists('logs'):
         os.makedirs('logs')
-    
-    # Main application logger
-    logger = logging.getLogger('elearning')
-    logger.setLevel(logging.DEBUG)
-    
+
+    # Configure the root logger
+    logger = logging.getLogger() # Get the root logger
+    logger.setLevel(logging.DEBUG) # Set root logger level to DEBUG
+
+    # Prevent adding handlers multiple times if init_logging is called again
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
     # File handler (rotating logs)
     file_handler = RotatingFileHandler(
         'logs/flask.log',
@@ -23,11 +27,11 @@ def init_logging():
     ))
     file_handler.setLevel(logging.DEBUG)
     logger.addHandler(file_handler)
-    
+
     # Console handler
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.INFO) # Keep console less verbose
     console_handler.setFormatter(logging.Formatter(
-        '%(levelname)s: %(message)s'
+        '%(asctime)s %(levelname)s: %(message)s' # Added timestamp to console
     ))
     logger.addHandler(console_handler)

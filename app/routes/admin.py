@@ -3,7 +3,6 @@
 from flask import Blueprint, jsonify, request, render_template, session, current_app
 from app.middleware.auth import require_admin
 from app.services.auth_service import supabase_admin_login
-# Removed: from app.services.auth_service import verify_admin_token 
 from app.services.admin_service import (
     get_dashboard_data_service,
     get_students_service,
@@ -19,25 +18,15 @@ from app.services.admin_service import (
     delete_instructor_service,
     get_course_by_id_service
 )
-from app.services.assignment_service import get_recent_progress
+from app.services.assignment_service import get_assignments_service
 import logging
-# Removed Firestore/Google Cloud related imports and initialization
-# from google.cloud import firestore
-# import google.auth.credentials
-# from google.cloud.firestore import transactional
-# Specify the path to your service account key file
-# SERVICE_ACCOUNT_KEY_FILE = "config/serviceAccountKey.json"  # Replace with your actual path
-
-# Load credentials explicitly
-# try:
-#     credentials = google.auth.credentials.Credentials.from_service_account_file(
-#         SERVICE_ACCOUNT_KEY_FILE
-#     )
-# except Exception as e:
-#     print(f"Error loading credentials: {e}")
+from flask import send_from_directory
 logger = logging.getLogger(__name__)
-# db = firestore.Client() # Removed Firestore client initialization
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+@admin_bp.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(current_app.static_folder, filename)
 
 @admin_bp.route('/api/login', methods=['POST'])
 def admin_login():
@@ -54,7 +43,7 @@ def admin_login():
         
         return jsonify({
             'success': True,
-            'token': auth_result['uid'],  # Using uid as token
+            'token': auth_result['access_token'],
             'user': {
                 'email': auth_result['email'],
                 'isAdmin': auth_result['isAdmin']
@@ -98,6 +87,17 @@ def admin_assignments():
     """Render the main assignments management page."""
     return render_template('admin/assignments.html')
 
+@admin_bp.route('/api/assignments')
+@require_admin
+def get_assignments():
+    """Get all assignments."""
+    try:
+        assignments = get_assignments_service()
+        return jsonify(assignments), 200
+    except Exception as e:
+        logger.error(f"Error getting assignments: {str(e)}")
+        return jsonify({'error': 'Failed to get assignments'}), 500
+
 @admin_bp.route('/courses/<course_id>/assignments')
 @require_admin
 def course_assignments(course_id):
@@ -108,10 +108,7 @@ def course_assignments(course_id):
 @require_admin
 def new_assignment_form(course_id):
     """Render the form to create a new assignment for a specific course."""
-    # Optionally, fetch course details if needed by the template
-    # course = get_course_by_id_service(course_id)
-    # if not course:
-    #     return "Course not found", 404
+   
     return render_template('admin/new_assignment.html', course_id=course_id)
 
 @admin_bp.route('/instructors')
@@ -131,27 +128,18 @@ def get_dashboard_data():
         logger.error(f"Error getting dashboard data: {str(e)}")
         return jsonify({'error': 'حدث خطأ أثناء جلب بيانات لوحة التحكم'}), 500
 
+
 @admin_bp.route('/api/assignments/recent')
 @require_admin
 def recent_assignments():
-    """Get recent assignments for dashboard."""
+    """Get all assignments for dashboard."""
     try:
-        supabase = get_supabase_client()
-        response = supabase.from_('assignments') \
-            .select('*, courses(title)') \
-            .order('created_at', desc=True) \
-            .limit(10) \
-            .execute()
-        
-        assignments = [{
-            **a,
-            'course_title': a['courses']['title'] if a['courses'] else 'غير معروف'
-        } for a in response.data]
-        
-        return jsonify(assignments)
+        assignments = get_assignments_service()
+        return jsonify(assignments), 200
     except Exception as e:
-        logger.error(f"Error getting recent assignments: {str(e)}")
+        logger.error(f"Error getting all assignments: {str(e)}")
         return jsonify({'error': 'Failed to get assignments'}), 500
+
 
 @admin_bp.route('/api/progress/recent')
 @require_admin
@@ -219,6 +207,27 @@ def create_student():
     except Exception as e:
         logger.error(f"Error creating student: {str(e)}")
         return jsonify({"error": "Failed to create student"}), 500
+
+@admin_bp.route('/api/courses/<course_id>/assignments/<assignment_id>', methods=['PUT'])
+@require_admin
+def update_assignment(course_id, assignment_id):
+    """Update an existing assignment."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided for update"}), 400
+
+        logger.info(f"Attempting to update assignment {assignment_id} in course {course_id}")
+        # Assuming update_assignment_service takes assignment_id and data
+        updated_assignment = update_assignment_service(assignment_id, data)
+        return jsonify(updated_assignment), 200
+
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error updating assignment: {str(e)}")
+        return jsonify({"error": "Failed to update assignment"}), 500
 
 @admin_bp.route('/api/students/<student_id>', methods=['DELETE'])
 @require_admin

@@ -1,4 +1,6 @@
+import logging
 from flask import Flask
+from app.routes.assignments import admin_assignments_bp
 from flask_cors import CORS
 from flask_session import Session
 from datetime import timedelta
@@ -11,7 +13,7 @@ from flask import redirect, url_for
 
 def create_app(config_name=None):
     # Initialize Flask app
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='app/static')
 
     # Load environment variables
     load_dotenv()
@@ -61,6 +63,21 @@ def create_app(config_name=None):
     # Configure logging
     from config.logging_config import init_logging
     init_logging()
+    logger = logging.getLogger(__name__)
+
+    # Clean up test files on startup
+    with app.app_context():
+        try:
+            from app.database.supabase_db import get_supabase_client
+            supabase = get_supabase_client()
+            # List and remove any test files
+            test_files = supabase.storage.from_('assignments').list()
+            for file in test_files:
+                if file['name'].startswith('test-'):
+                    supabase.storage.from_('assignments').remove([file['name']])
+            logger.info("Cleaned up test files on startup")
+        except Exception as e:
+            logger.warning(f"Could not clean test files: {str(e)}")
 
     # Removed Firebase Admin SDK initialization block
 
@@ -75,12 +92,18 @@ def create_app(config_name=None):
     from app.routes.courses import courses_bp
     from app.routes.assignments import assignments_bp
     from app.routes.student import student_bp
+    from flask import Blueprint
 
     app.register_blueprint(admin_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(courses_bp)
     app.register_blueprint(assignments_bp)
     app.register_blueprint(student_bp)
+    app.register_blueprint(admin_assignments_bp)
+
+    # Create a static blueprint
+    static_bp = Blueprint('static', __name__, static_folder='app/static', static_url_path='/static')
+    app.register_blueprint(static_bp)
 
     @app.route('/')
     def index():

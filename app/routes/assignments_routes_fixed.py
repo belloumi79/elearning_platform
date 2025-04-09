@@ -20,8 +20,6 @@ logger = logging.getLogger(__name__)
 
 assignments_bp = Blueprint('assignments', __name__, url_prefix='/api/assignments')
 
-admin_assignments_bp = Blueprint('admin_assignments', __name__, url_prefix='/admin/courses')
-
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
@@ -56,36 +54,3 @@ def test_upload():
     except Exception as e:
         logger.error(f"Test upload error: {str(e)}", exc_info=True)
         return jsonify({'error': 'Internal server error'}), 500
-@assignments_bp.route('/recent')
-def recent_assignments_api():
-    """
-    Return recent assignments and exams for dashboard tab.
-    """
-    try:
-        from app.services.assignment_service import get_recent_assignments_service
-        recent_assignments = get_recent_assignments_service(limit=10)
-        return jsonify(recent_assignments), 200
-        logger.error(f"Error fetching recent assignments: {str(e)}")
-    except Exception as e:
-        return jsonify([]), 500
-    logger.error(f"Error fetching assignments for course {course_id}: {str(e)}")
-    return jsonify([]), 500
-@admin_assignments_bp.route('/<course_id>/assignments', methods=['GET'])
-def get_course_assignments_admin(course_id):
-    """
-    Return assignments for a specific course (admin view).
-    """
-    try:
-        from app.services.assignment_service import get_course_assignments
-        assignments = get_course_assignments(course_id)
-        return jsonify(assignments), 200
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error fetching assignments for course {course_id}: {str(e)}")
-        return jsonify([]), 500
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error fetching recent assignments: {str(e)}")
-        return jsonify([]), 500
-admin_assignments_bp = Blueprint('admin_assignments', __name__, url_prefix='/admin/courses')

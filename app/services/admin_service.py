@@ -58,6 +58,17 @@ def get_dashboard_data_service():
         recent_students = recent_students_res.data if recent_students_res.data else []
         recent_courses = recent_courses_res.data if recent_courses_res.data else []
 
+        # Fetch recent registrations (enrollments) with error handling
+        try:
+            recent_registrations_res = supabase_client.from_('enrollments').select(
+                'id, created_at, student:students(id, name, email), course:courses(id, title)'
+            ).order('created_at', desc=True).limit(5).execute()
+
+            recent_registrations = recent_registrations_res.data if recent_registrations_res.data else []
+        except Exception as enroll_err:
+            logger.error(f"Error fetching recent registrations: {str(enroll_err)}")
+            recent_registrations = []
+
         return {
             'statistics': {
                 'total_students': total_students,
@@ -67,7 +78,8 @@ def get_dashboard_data_service():
             'recent_activities': {
                 'students': recent_students,
                 'courses': recent_courses
-            }
+            },
+            'recent_registrations': recent_registrations
         }
     except Exception as e:
         logger.error(f"Error getting dashboard data: {str(e)}")
@@ -155,17 +167,43 @@ def create_student_service(data):
             'updated_at': datetime.utcnow().isoformat()
         }
 
-        # Insert student - use single() to ensure we get exactly one record back
-        response = supabase_client.from_('students').insert(student_data).select('*').single().execute()
-        
-        # Check for errors
-        if hasattr(response, 'error') and response.error:
-            raise Exception(response.error.message)
-            
-        if not hasattr(response, 'data') or not response.data:
-            raise Exception("No data returned after student creation")
-            
-        created_student = response.data
+        # Step 1: Insert student data
+        insert_response = supabase_client.from_('students').insert(student_data).execute()
+
+        # Check for errors after insert execution
+        # Check if error attribute exists and is truthy
+        if hasattr(insert_response, 'error') and insert_response.error:
+             logger.error(f"Supabase error during student insert: {insert_response.error.message}")
+             raise Exception(f"Failed to insert student record: {insert_response.error.message}")
+        if not insert_response.data:
+             logger.error(f"Student insert seemed successful but no data returned. Response: {insert_response}")
+             raise Exception("Failed to retrieve student data after creation (no data in insert response).")
+
+        # Get the ID from the insert response data
+        if not isinstance(insert_response.data, list) or not insert_response.data:
+             logger.error(f"Unexpected data format in insert response: {insert_response.data}")
+             raise Exception("Unexpected response format after student insert.")
+
+        created_student_partial = insert_response.data[0]
+        created_student_id = created_student_partial.get('id')
+        if not created_student_id:
+             logger.error(f"Could not find 'id' in insert response data: {created_student_partial}")
+             raise Exception("Could not determine created student ID.")
+
+        # Step 2: Select the full student record using the ID to ensure we have all fields
+        logger.debug(f"Selecting newly created student with ID: {created_student_id}")
+        select_response = supabase_client.from_('students').select('*').eq('id', created_student_id).single().execute()
+
+        # Check for errors after select execution
+        if hasattr(select_response, 'error') and select_response.error:
+             logger.error(f"Supabase error selecting student after insert: {select_response.error.message}")
+             # Consider if we need to rollback the insert here? Difficult without transactions.
+             raise Exception(f"Failed to select student record after creation: {select_response.error.message}")
+        if not select_response.data:
+             logger.error(f"Could not select student record (ID: {created_student_id}) after successful insert.")
+             raise Exception("Failed to retrieve full student record after creation.")
+
+        created_student = select_response.data # .single() returns the dict directly
         
         # Handle course enrollment if provided
         if 'course_id' in data:

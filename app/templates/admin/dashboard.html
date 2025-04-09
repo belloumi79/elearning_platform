@@ -202,9 +202,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr>
-                                                <td colspan="4" class="text-center">جاري التحميل...</td>
-                                            </tr>
+                                            <!-- No initial loading message here, DataTables will handle empty state -->
                                         </tbody>
                                     </table>
                                 </div>
@@ -283,17 +281,17 @@
                 document.getElementById('recentStudents').innerHTML =
                     studentsHtml || '<tr><td colspan="3" class="text-center">لا يوجد طلاب جدد</td></tr>';
 
-                // Update recent enrollments with null checks
-                const enrollments = data.recent_activities?.enrollments || [];
-                const enrollmentsHtml = enrollments.map(e => `
+                // Update recent registrations (enrollments)
+                const registrations = data.recent_registrations || [];
+                const registrationsHtml = registrations.map(r => `
                     <tr>
-                        <td>${e.student_name || 'غير معروف'}</td>
-                        <td>${e.course_title || 'غير معروف'}</td>
-                        <td>${e.enrolled_at ? new Date(e.enrolled_at).toLocaleDateString('ar-SA') : 'غير معروف'}</td>
+                        <td>${r.student?.name || 'غير معروف'}</td>
+                        <td>${r.course?.title || 'غير معروف'}</td>
+                        <td>${r.created_at ? new Date(r.created_at).toLocaleDateString('ar-SA') : 'غير معروف'}</td>
                     </tr>
                 `).join('');
                 document.getElementById('recentEnrollments').innerHTML =
-                    enrollmentsHtml || '<tr><td colspan="3" class="text-center">لا توجد تسجيلات حديثة</td></tr>';
+                    registrationsHtml || '<tr><td colspan="3" class="text-center">لا توجد تسجيلات حديثة</td></tr>';
 
                 // Initialize assignments table
                 assignmentsTable = $('#assignmentsTable').DataTable({
@@ -323,21 +321,21 @@
                             }
                         },
                         {
-                            data: null,
-                            render: function(data) {
-                                return `<a href="/admin/assignments/${data.id}" class="btn btn-sm btn-primary">التفاصيل</a>`;
+                            data: null, // Use null for actions column
+                            orderable: false, // Don't allow ordering by this column
+                            searchable: false, // Don't allow searching by this column
+                            render: function(data, type, row) {
+                                // 'row' contains the full data object for the current row
+                                return `<a href="/admin/assignments/${row.id}" class="btn btn-sm btn-info">تفاصيل</a>`;
                             }
                         }
                     ],
                     language: dataTableArabic
                 });
 
-                // Initialize progress table
+                // Initialize progress table (without initial AJAX load)
                 progressTable = $('#progressTable').DataTable({
-                    ajax: {
-                        url: '/api/progress/recent',
-                        dataSrc: ''
-                    },
+                    // Removed ajax option
                     columns: [
                         { data: 'student_name' },
                         { data: 'course_title' },
@@ -354,7 +352,11 @@
                             }
                         }
                     ],
-                    language: dataTableArabic
+                    language: dataTableArabic,
+                     // Add placeholder if table is empty and no ajax is configured
+                    "oLanguage": {
+                        "sEmptyTable": "لا توجد بيانات تقدم حالياً" 
+                    }
                 });
 
             } catch (error) {
@@ -366,6 +368,13 @@
                     '<tr><td colspan="3" class="text-center text-danger">حدث خطأ أثناء تحميل البيانات</td></tr>';
                 document.getElementById('recentEnrollments').innerHTML = 
                     '<tr><td colspan="3" class="text-center text-danger">حدث خطأ أثناء تحميل البيانات</td></tr>';
+                // Optional: Show error in tables if main data fetch fails
+                 if (!assignmentsTable) {
+                     $('#assignmentsTable tbody').html('<tr><td colspan="6" class="text-center text-danger">خطأ تحميل بيانات الواجبات</td></tr>');
+                 }
+                 if (!progressTable) {
+                    $('#progressTable tbody').html('<tr><td colspan="4" class="text-center text-danger">خطأ تحميل بيانات التقدم</td></tr>');
+                 }
             }
         }
 

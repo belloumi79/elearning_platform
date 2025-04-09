@@ -19,7 +19,11 @@
 
         <div class="mb-3">
             <label for="assignmentType" class="form-label">نوع الواجب</label>
-            <input type="text" class="form-control" id="assignmentType" placeholder="e.g., Quiz, Homework, Project" required>
+            <select class="form-select" id="assignmentType" required>
+                <option value="" selected disabled>-- اختر النوع --</option>
+                <option value="assignment">واجب (Assignment)</option>
+                <option value="quiz">اختبار قصير (Quiz)</option>
+            </select>
         </div>
         
         <div class="mb-3">
@@ -101,6 +105,8 @@ function submitAssignment() {
         if (data && data.id) {
             window.location.href = `/admin/courses/${$('#courseId').val()}/assignments`;
         } else {
+            // Log the unexpected data received from the server
+            console.error("Redirect failed. Server returned 201 but data is unexpected:", data);
             // Display error from response if available, otherwise generic message
             alert('حدث خطأ أثناء حفظ الواجب: ' + (data && data.error ? data.error : 'استجابة غير متوقعة من الخادم.'));
         }
