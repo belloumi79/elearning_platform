@@ -13,7 +13,7 @@ from flask import redirect, url_for
 
 def create_app(config_name=None):
     # Initialize Flask app
-    app = Flask(__name__, static_folder='app/static')
+    app = Flask(__name__, static_folder='static')
 
     # Load environment variables
     load_dotenv()
@@ -53,6 +53,13 @@ def create_app(config_name=None):
         },
         "r/courses/api/*": {
             "origins": ["http://localhost:5000", "https://web-production-8de28.up.railway.app"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": True
+        },
+        "r/admin/api/*": {
+            "origins": ["https://web-production-8de28.up.railway.app", "http://localhost:5000"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "expose_headers": ["Content-Type"],
@@ -101,8 +108,8 @@ def create_app(config_name=None):
     app.register_blueprint(student_bp)
     app.register_blueprint(admin_assignments_bp)
 
-    # Create a static blueprint
-    static_bp = Blueprint('static', __name__, static_folder='app/static', static_url_path='/static')
+    # Create a static blueprint (keep this)
+    static_bp = Blueprint('static', __name__, static_folder='static', static_url_path='/static')
     app.register_blueprint(static_bp)
 
     @app.route('/')

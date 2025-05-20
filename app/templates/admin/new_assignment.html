@@ -4,7 +4,7 @@
 <div class="container mt-4">
     <h2>إضافة واجب جديد</h2>
     
-    <form id="addAssignmentForm" enctype="multipart/form-data">
+    <form id="addAssignmentForm" method="POST" action="{{ url_for('admin.new_assignment_form', course_id=course_id) }}" enctype="multipart/form-data">
         <input type="hidden" id="courseId" value="{{ course_id }}">
         
         <div class="mb-3">
@@ -89,7 +89,7 @@ function submitAssignment() {
     });
 
     const courseId = $('#courseId').val(); // Get course ID
-    fetch(`/api/assignments/${courseId}`, { // Construct correct URL
+    fetch(`/admin/courses/${courseId}/assignments/new`, { // Corrected URL to match backend route
         method: 'POST',
         body: formData
     })

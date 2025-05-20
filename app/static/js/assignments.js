@@ -26,7 +26,7 @@ const dataTableArabic = {
         // Check if we are on a specific course's assignment page
         if (window.courseId) {
             // Construct the URL for fetching assignments for this specific course
-            apiUrl = `/admin/courses/${window.courseId}/assignments`; // Corrected URL prefix
+            apiUrl = `/admin/api/courses/${window.courseId}/assignments`; // Use the new JSON API endpoint
         } else {
             // Default URL for fetching all assignments (e.g., on a dashboard)
             // Assuming this endpoint exists under the admin blueprint

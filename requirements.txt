@@ -10,3 +10,6 @@ psycopg2-binary==2.9.5
 gunicorn==21.2.0
 Flask-Session
 Flask-Login
+flask-migrate
+flask-bcrypt
+flask-mail

@@ -41,13 +41,23 @@ def admin_login():
         # Use existing supabase_admin_login function
         auth_result = supabase_admin_login(data['email'], data['password'])
         
+        # Store user info and admin status in session
+        session['user'] = {
+            'id': auth_result['user_id'], # Assuming auth_result contains user_id
+            'email': auth_result['email'],
+            'isAdmin': auth_result['isAdmin']
+        }
+        session['access_token'] = auth_result['access_token']
+        # Assuming refresh_token is also returned by supabase_admin_login
+        if 'refresh_token' in auth_result:
+             session['refresh_token'] = auth_result['refresh_token']
+        session.modified = True # Mark session as modified
+
+        logger.info(f"Admin login successful for user {auth_result['user_id']}. Session updated.")
+
         return jsonify({
             'success': True,
-            'token': auth_result['access_token'],
-            'user': {
-                'email': auth_result['email'],
-                'isAdmin': auth_result['isAdmin']
-            }
+            'message': 'Login successful' # No need to send token/user back in JSON if using session
         }), 200
 
     except ValueError as e:
@@ -97,6 +107,19 @@ def get_assignments():
     except Exception as e:
         logger.error(f"Error getting assignments: {str(e)}")
         return jsonify({'error': 'Failed to get assignments'}), 500
+@admin_bp.route('/api/courses/<course_id>/assignments')
+@require_admin
+def get_course_assignments_api(course_id):
+    """Get assignments for a specific course (admin API)."""
+    try:
+        from app.services.assignment_service import get_course_assignments
+        assignments = get_course_assignments(course_id)
+        return jsonify(assignments), 200
+    except Exception as e:
+        logger = current_app.logger
+        logger.error(f"Error getting assignments for course {course_id}: {str(e)}")
+        return jsonify({'error': 'Failed to get assignments'}), 500
+
 
 @admin_bp.route('/courses/<course_id>/assignments')
 @require_admin
@@ -104,11 +127,35 @@ def course_assignments(course_id):
     """Render the assignments management page for a course."""
     return render_template('admin/assignments.html', course_id=course_id)
 
-@admin_bp.route('/courses/<course_id>/assignments/new')
+@admin_bp.route('/courses/<course_id>/assignments/new', methods=['GET', 'POST'])
 @require_admin
 def new_assignment_form(course_id):
-    """Render the form to create a new assignment for a specific course."""
-   
+    """Render the form to create a new assignment for a specific course, or handle form submission."""
+    if request.method == 'POST':
+        # Extract form data
+        title = request.form.get('assignmentTitle')
+        description = request.form.get('assignmentDescription')
+        assignment_type = request.form.get('assignmentType')
+        due_date = request.form.get('dueDate')
+        max_points = request.form.get('maxPoints')
+        # TODO: Handle file uploads and external links if needed
+        try:
+            from app.services.assignment_service import create_assignment
+            assignment = create_assignment(
+                course_id=course_id,
+                title=title,
+                description=description,
+                assignment_type=assignment_type,
+                due_date=due_date,
+                max_points=max_points,
+                # Add file handling and links if needed
+            )
+            return jsonify({'success': True, 'assignment': assignment}), 201
+        except Exception as e:
+            logger = current_app.logger
+            logger.error(f"Error creating assignment: {str(e)}")
+            return jsonify({'error': 'Failed to create assignment'}), 500
+    # GET: render the form
     return render_template('admin/new_assignment.html', course_id=course_id)
 
 @admin_bp.route('/instructors')
