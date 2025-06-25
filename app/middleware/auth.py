@@ -110,12 +110,10 @@ def require_auth(f):
                 is_admin_from_db = False
                 admin_check_successful = False
                 try:
-                    admin_response = supabase.from_('admins').select('user_id', count='exact').eq('user_id', user_id).execute()
+                    admin_response = supabase.from_('admins').select('user_id').eq('user_id', user_id).execute()
                     logger.debug(f"Admin check DB raw response object: {admin_response}")
-                    db_count = getattr(admin_response, 'count', None)
-                    logger.debug(f"Admin check DB response count: {db_count}")
-
-                    if db_count is not None and db_count > 0:
+                    
+                    if admin_response.data and len(admin_response.data) > 0:
                         is_admin_from_db = True
                         logger.debug(f"User {user_id} confirmed as admin via DB check.")
                     else:
@@ -146,15 +144,11 @@ def require_auth(f):
 
 # --- require_admin remains the same ---
 
+@require_auth  # Add require_auth decorator to validate session first
 def require_admin(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         logger.debug("Checking admin authorization via require_admin decorator")
-
-        # Check session existence first
-        if 'user' not in session:
-            logger.warning("Admin access denied - no user session found")
-            return jsonify({'error': 'Admin access required. No active session.'}), 403 # Use 403 Forbidden
 
         # Check isAdmin flag within the session
         if not session['user'].get('isAdmin'):

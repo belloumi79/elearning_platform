@@ -64,19 +64,19 @@ def api_admin_login():
         # Call Supabase login function (to be implemented in auth_service)
         # This service function should also verify if the user is an admin
         from app.services.auth_service import supabase_admin_login
-        user_data = supabase_admin_login(email, password) # This needs to return necessary user info for session
+        user_data = supabase_admin_login(email, password)
 
         # Create session
-        session['user'] = {'id': user_data['uid'], 'isAdmin': user_data['isAdmin']} # Store relevant Supabase user info (e.g., id, isAdmin)
-        session['csrf_token'] = secrets.token_hex(32) # Keep CSRF token for form protection
-        session['access_token'] = user_data['access_token']
-        session['refresh_token'] = user_data['refresh_token']
+        session['user'] = {
+            'id': user_data['uid'],
+            'email': user_data['email'],
+            'isAdmin': True
+        }
 
-        # Return success and the access token
+        # Return success response
         return jsonify({
             'success': True,
-            'message': 'Login successful',
-            'csrfToken': session['csrf_token'] # Optional: only if frontend needs it explicitly
+            'message': 'Login successful'
         })
 
     except Exception as e:

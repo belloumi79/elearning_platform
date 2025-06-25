@@ -43,7 +43,7 @@ def admin_login():
         
         # Store user info and admin status in session
         session['user'] = {
-            'id': auth_result['user_id'], # Assuming auth_result contains user_id
+            'id': auth_result['uid'],
             'email': auth_result['email'],
             'isAdmin': auth_result['isAdmin']
         }

@@ -26,6 +26,36 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 logger.info("AuthService initialized with Supabase client using Service Role Key.")
 
+def update_user_password(user_id: str, new_password: str):
+    """
+    Updates a user's password using Supabase's admin API.
+    
+    Args:
+        user_id (str): The ID of the user whose password needs to be updated.
+        new_password (str): The new password for the user.
+        
+    Raises:
+        Exception: If the password update fails.
+    """
+    try:
+        logger.info(f"Attempting to update password for user ID: {user_id}")
+        response = supabase.auth.admin.update_user_by_id(
+            user_id,
+            {"password": new_password}
+        )
+        if response.user:
+            logger.info(f"Password updated successfully for user ID: {user_id}")
+            return True
+        else:
+            error_message = "Unknown error during password update."
+            if hasattr(response, 'error') and response.error:
+                error_message = response.error.message
+            logger.error(f"Failed to update password for user ID {user_id}: {error_message}")
+            raise Exception(f"Failed to update password: {error_message}")
+    except Exception as e:
+        logger.error(f"Error updating password for user ID {user_id}: {str(e)}")
+        raise Exception(f"Error updating password: {str(e)}")
+
 
 def supabase_admin_login(email, password):
     """
@@ -46,26 +76,28 @@ def supabase_admin_login(email, password):
     """
     try:
         logger.info(f"Attempting Supabase login for email: {email}")
-        # 1. Sign in using Supabase Auth
-        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        # Create a public client for login (using anon key)
+        SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+        if not SUPABASE_ANON_KEY:
+            raise ValueError("Supabase ANON_KEY must be set in environment variables")
         
-        # Check for Supabase Auth errors explicitly if possible (depends on library version)
-        # Assuming response object contains user info on success
+        public_supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        
+        # 1. Sign in using public client
+        response = public_supabase.auth.sign_in_with_password({"email": email, "password": password})
+        
+        # Check for Supabase Auth errors
         if response.user:
             user = response.user
             uid = user.id
             logger.info(f"Supabase Auth successful for user ID: {uid}")
 
-            # 2. Verify if the user is listed in the 'admins' table using the correct column 'user_id'
+            # 2. Verify if the user is listed in the 'admins' table using the service client
             try:
-                logger.info(f"Checking 'admins' table for user_id: {uid}") # Log the UID being checked
-                # Use the global 'supabase' client, not 'self.supabase'
-                admin_check_response = supabase.from_('admins').select("user_id").eq('user_id', uid).limit(1).execute() 
+                logger.info(f"Checking 'admins' table for user_id: {uid}")
+                admin_check_response = supabase.from_('admins').select("user_id").eq('user_id', uid).execute()
                 
-                logger.info(f"Admin check response data: {admin_check_response.data}") # Log the response data
-                logger.debug(f"Full admin check response: {admin_check_response}") # Log the full response for debugging
-
-                if admin_check_response.data:
+                if admin_check_response.data and len(admin_check_response.data) > 0:
                     logger.info(f"User {uid} confirmed as admin.")
                     # Return necessary user info for session
                     return {
@@ -78,34 +110,27 @@ def supabase_admin_login(email, password):
                 else:
                     logger.warning(f"User {uid} authenticated but is not an admin.")
                     # Sign out the user as they are not authorized for the admin panel
-                    supabase.auth.sign_out()
+                    public_supabase.auth.sign_out()
                     raise ValueError("User is not authorized as admin.")
             except Exception as db_error:
-                logger.error(f"Error checking admin status in Supabase table 'admins': {str(db_error)}")
-                # Sign out the user due to uncertainty
-                supabase.auth.sign_out()
+                logger.error(f"Error checking admin status: {str(db_error)}")
+                public_supabase.auth.sign_out()
                 raise Exception("Failed to verify admin status.")
         else:
-            # Handle cases where sign_in_with_password might not raise an error but returns no user
-            # (Check Supabase client library documentation for exact error handling)
-            logger.warning(f"Supabase Auth failed for email: {email}. Response might indicate error.")
-            # Attempt to extract error message if available
-            error_message = "Invalid email or password." # Default message
+            # Handle sign-in failure
+            error_message = "Invalid email or password."
             if hasattr(response, 'error') and response.error:
                  error_message = response.error.message
-            elif hasattr(response, 'message'): # Some versions might use 'message'
+            elif hasattr(response, 'message'):
                  error_message = response.message
             raise ValueError(error_message)
 
     except Exception as e:
-        # Catch specific Supabase exceptions if the library defines them, otherwise catch general Exception
-        logger.error(f"Supabase admin login error for {email}: {str(e)}")
-        # Re-raise ValueErrors for credential issues, wrap others
+        logger.error(f"Admin login error: {str(e)}")
         if isinstance(e, ValueError):
             raise e
         else:
-            # Log the original error but raise a generic one
-            raise Exception(f"An unexpected error occurred during login: {str(e)}")
+            raise Exception(f"An unexpected error occurred: {str(e)}")
 
 
 # Removed verify_admin_token function as it's replaced by supabase_admin_login

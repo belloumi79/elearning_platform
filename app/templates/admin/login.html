@@ -99,7 +99,7 @@
             loginButton.disabled = true;
 
             try {
-                const response = await fetch('{{ url_for("admin.admin_login") }}', {
+                const response = await fetch('/api/admin/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -107,26 +107,21 @@
                     body: JSON.stringify({
                         email: email.trim(),
                         password: password
-                    }),
-                    credentials: 'same-origin'
+                    })
                 });
 
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Store token and redirect
-                    localStorage.setItem('adminToken', data.token);
+                    // Redirect to dashboard - no need to store token manually
                     window.location.href = '/admin/dashboard';
                 } else {
-                    // Show specific error message if available
-                    const errorMsg = data.message || 'خطأ في تسجيل الدخول: البريد الإلكتروني أو كلمة المرور غير صحيحة';
-                    throw new Error(errorMsg);
+                    throw new Error(data.error || 'خطأ في تسجيل الدخول: البريد الإلكتروني أو كلمة المرور غير صحيحة');
                 }
             } catch (error) {
                 console.error('Login error:', error);
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
-            } finally {
                 loadingIndicator.style.display = 'none';
                 loginButton.disabled = false;
             }

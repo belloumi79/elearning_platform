@@ -80,7 +80,6 @@ const dataTableArabic = {
                         return data === 'assignment' ? 'واجب' : (data === 'quiz' ? 'اختبار' : data);
                     }
                 },
-                // Removed course column
                 {
                     data: 'due_date',
                     render: function(data) {
