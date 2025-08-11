@@ -5,7 +5,7 @@
   # Which nixpkgs channel to use.
   channel = "stable-23.11"; # or "unstable"
   # Use https://search.nixos.org/packages to find packages
-  packages = [ pkgs.python3 pkgs.sudo  pkgs.python311Packages.pip pkgs.tree pkgs.graphviz pkgs.docker pkgs.systemd];
+  packages = [ pkgs.python3 pkgs.sudo  pkgs.python311Packages.pip pkgs.tree pkgs.graphviz pkgs.docker pkgs.systemd pkgs.heroku];
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [ "ms-python.python" ];

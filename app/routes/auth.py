@@ -14,106 +14,92 @@ Routes:
     # - /api/user/profile/<uid>: Get user profile (Firebase - NEEDS REFACTOR)
 """
 
-from flask import Blueprint, jsonify, request, render_template, session, current_app
-# Removed Firebase imports: from firebase_admin import auth, firestore
-# Initialize Supabase client directly
-import os
-from supabase import create_client, Client
-import secrets
+from flask import Blueprint, jsonify, request, current_app
 import logging
-from datetime import datetime
-# Removed: from app.models.user import User # Assuming User model might change or be unused with Supabase auth
+from app.services.auth_service import supabase_admin_login
+from app.services.jwt_service import create_access_token, create_refresh_token, decode_token
 
 logger = logging.getLogger(__name__)
 
-# Initialize Supabase client (similar to auth_service.py and middleware/auth.py)
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") # Use service key if needed for admin actions, otherwise ANON_KEY
+auth_bp = Blueprint('auth', __name__, url_prefix='/api/v1/auth')
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    # Use ANON_KEY as fallback if service key isn't strictly needed for login check
-    SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
-    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        raise ValueError("Supabase URL and Anon or Service key must be set in environment variables.")
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-    logger.warning("Using Supabase Anon Key for auth routes. Service Key might be required for admin operations.")
-else:
-    # Prefer service key if available, might be needed later
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    logger.info("Using Supabase Service Key for auth routes.")
-
-
-auth_bp = Blueprint('auth', __name__)
-
-@auth_bp.route('/admin/login')
-def admin_login():
-    """Render admin login page."""
-    return render_template('admin/login.html')
-
-@auth_bp.route('/api/admin/login', methods=['POST']) # Renamed from /verify
-def api_admin_login():
-    """Handle admin login using email/password with Supabase."""
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    """
+    Handles user login for both admins and students.
+    Returns JWT access and refresh tokens upon successful authentication.
+    """
     try:
         data = request.get_json()
         email = data.get('email')
         password = data.get('password')
 
         if not email or not password:
-            raise ValueError("Email and password are required")
+            return jsonify({"error": "Email and password are required"}), 400
 
-        # Call Supabase login function (to be implemented in auth_service)
-        # This service function should also verify if the user is an admin
-        from app.services.auth_service import supabase_admin_login
+        # The supabase_admin_login function can be used for any user login.
+        # It returns user data, including an 'isAdmin' flag.
         user_data = supabase_admin_login(email, password)
 
-        # Create session
-        session['user'] = {
-            'id': user_data['uid'],
+        # Prepare data for JWT payload
+        jwt_payload = {
+            'user_id': user_data['uid'],
             'email': user_data['email'],
-            'isAdmin': True
+            'isAdmin': user_data.get('isAdmin', False)
         }
 
-        # Return success response
+        # Generate tokens
+        access_token = create_access_token(data=jwt_payload)
+        refresh_token = create_refresh_token(data=jwt_payload)
+
         return jsonify({
-            'success': True,
-            'message': 'Login successful'
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token_type': 'bearer'
+        })
+
+    except ValueError as e:
+        # This can be raised from supabase_admin_login for invalid credentials
+        logger.warning(f"Login failed for email {email}: {str(e)}")
+        return jsonify({"error": str(e)}), 401
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during login: {str(e)}", exc_info=True)
+        return jsonify({"error": "An internal server error occurred."}), 500
+
+@auth_bp.route('/refresh', methods=['POST'])
+def refresh():
+    """
+    Refreshes an access token using a valid refresh token.
+    """
+    try:
+        data = request.get_json()
+        refresh_token = data.get('refresh_token')
+
+        if not refresh_token:
+            return jsonify({'error': 'Refresh token is required'}), 400
+
+        payload = decode_token(refresh_token)
+
+        if not payload or payload.get('type') != 'refresh':
+            return jsonify({'error': 'Invalid or expired refresh token'}), 401
+
+        # Prepare new access token payload from the refresh token's payload
+        new_access_token_payload = {
+            'user_id': payload['user_id'],
+            'email': payload['email'],
+            'isAdmin': payload.get('isAdmin', False)
+        }
+
+        new_access_token = create_access_token(data=new_access_token_payload)
+
+        return jsonify({
+            'access_token': new_access_token,
+            'token_type': 'bearer'
         })
 
     except Exception as e:
-        logger.error(f"Admin login failed: {str(e)}")
-        # Provide slightly more specific error messages based on the exception type
-        error_message = 'An unexpected error occurred during login.'
-        status_code = 500
-        if isinstance(e, ValueError):
-            # Specific messages from auth_service for credential/admin issues
-            error_message = str(e)
-            status_code = 401 # Unauthorized or Forbidden (depending on exact meaning)
-        elif "Invalid email or password" in str(e): # Catch potential generic Supabase auth error string
-             error_message = "Invalid email or password."
-             status_code = 401
-        # Keep logging the detailed error server-side
-        # logger.error(f"Admin login failed: {str(e)}") # Already logged in auth_service
-
-        return jsonify({
-            'success': False,
-            'error': error_message
-        }), status_code
-
-
-# @auth_bp.route('/setup/admin/<email>') # Firebase specific - Removed
-# def setup_admin(email):
-#     """Create initial admin user. (Firebase version - REMOVED)"""
-#     # ... (Firebase code removed) ...
-#     pass
-
-
-@auth_bp.route('/admin/logout')
-def admin_logout():
-    """Clear the admin session."""
-    session.clear()
-    # Redirect to login page after logout might be better UX
-    # from flask import redirect, url_for
-    # return jsonify({'success': True, 'message': 'Logged out successfully'})
+        logger.error(f"An unexpected error occurred during token refresh: {str(e)}", exc_info=True)
+        return jsonify({"error": "An internal server error occurred."}), 500
 
 
 # @auth_bp.route('/api/signup', methods=['POST']) # Firebase specific - Removed

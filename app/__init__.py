@@ -1,9 +1,8 @@
 import logging
-from flask import Flask
-from app.routes.assignments import admin_assignments_bp
+from flask import Flask, jsonify
 from flask_cors import CORS
-from flask_session import Session
 from datetime import timedelta
+from flask_swagger_ui import get_swaggerui_blueprint
 import os
 import secrets
 from dotenv import load_dotenv
@@ -21,51 +20,8 @@ def create_app(config_name=None):
     # Configure secret key
     app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 
-    # Configure session
-    app.config['SESSION_TYPE'] = 'filesystem'
-    app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), '..', 'flask_session')
-    app.config['SESSION_COOKIE_NAME'] = 'elearning_session'
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
-    app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production
-    app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
-    # Removed Firebase config block
-
-    # Initialize extensions
-    Session(app)
-
-    # Configure CORS
-    CORS(app, resources={
-        "r/api/*": {
-            "origins": ["https://web-production-8de28.up.railway.app", "http://localhost:5000"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type"],
-            "supports_credentials": True
-        },
-        "r/api/user/*": {
-            "origins": ["http://localhost:5000", "https://web-production-8de28.up.railway.app"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type"],
-            "supports_credentials": True
-        },
-        "r/courses/api/*": {
-            "origins": ["http://localhost:5000", "https://web-production-8de28.up.railway.app"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type"],
-            "supports_credentials": True
-        },
-        "r/admin/api/*": {
-            "origins": ["https://web-production-8de28.up.railway.app", "http://localhost:5000"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type"],
-            "supports_credentials": True
-        }
-    })
+    # Configure CORS for the new API structure
+    CORS(app, resources={r"/api/v1/*": {"origins": "*"}}) # Allow all origins for now
 
     # Configure logging
     from config.logging_config import init_logging
@@ -93,28 +49,34 @@ def create_app(config_name=None):
     def favicon():
         return app.send_static_file('favicon.ico') if os.path.exists(os.path.join(app.static_folder, 'favicon.ico')) else ('', 204)
 
-    # Register blueprints
-    from app.routes.admin import admin_bp
-    from app.routes.auth import auth_bp
-    from app.routes.courses import courses_bp
-    from app.routes.assignments import assignments_bp
-    from app.routes.student import student_bp
-    from flask import Blueprint
+    # Register API blueprints
+    from app.routes.auth import auth_bp as auth_api_bp
+    from app.routes.admin import admin_bp as admin_api_bp
+    from app.routes.student import student_bp as student_api_bp
+    from app.routes.courses import courses_bp as courses_api_bp
 
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(courses_bp)
-    app.register_blueprint(assignments_bp)
-    app.register_blueprint(student_bp)
-    app.register_blueprint(admin_assignments_bp)
+    app.register_blueprint(auth_api_bp)
+    app.register_blueprint(admin_api_bp)
+    app.register_blueprint(student_api_bp)
+    app.register_blueprint(courses_api_bp)
 
-    # Create a static blueprint (keep this)
-    static_bp = Blueprint('static', __name__, static_folder='static', static_url_path='/static')
-    app.register_blueprint(static_bp)
+    # --- Swagger UI Setup ---
+    SWAGGER_URL = '/api/docs'  # URL for exposing Swagger UI
+    API_URL = '/static/swagger.json'  # Our API definition
+
+    swaggerui_blueprint = get_swaggerui_blueprint(
+        SWAGGER_URL,
+        API_URL,
+        config={
+            'app_name': "E-Learning Platform API"
+        }
+    )
+    app.register_blueprint(swaggerui_blueprint)
+    # --- End Swagger UI Setup ---
 
     @app.route('/')
     def index():
-        return redirect(url_for('auth.admin_login'))
+        return jsonify({"message": "Welcome to the e-learning platform API. See /api/docs for documentation."})
 
     @app.after_request
     def add_security_headers(response):

@@ -7,10 +7,7 @@ credentials and retrieve user data.
 """
 
 import logging
-from app.models.user import User
 from datetime import datetime
-from app.models.student import Student
-from app.models.course import Course
 from supabase import create_client, Client
 import os
 
@@ -20,11 +17,19 @@ logger = logging.getLogger(__name__)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    raise ValueError("Supabase URL and Service Role Key must be set in environment variables for auth service.")
+if not SUPABASE_URL:
+    logger.critical("SUPABASE_URL environment variable is not set for auth service.")
+    raise ValueError("Supabase URL must be set in environment variables for auth service.")
+if not SUPABASE_SERVICE_KEY:
+    logger.critical("SUPABASE_SERVICE_ROLE_KEY environment variable is not set for auth service.")
+    raise ValueError("Supabase Service Role Key must be set in environment variables for auth service.")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-logger.info("AuthService initialized with Supabase client using Service Role Key.")
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    logger.info("AuthService initialized with Supabase client using Service Role Key.")
+except Exception as e:
+    logger.critical(f"Failed to initialize Supabase client in auth service: {str(e)}", exc_info=True)
+    raise RuntimeError("Critical: Supabase client failed to initialize in auth service.") from e
 
 def update_user_password(user_id: str, new_password: str):
     """
@@ -210,37 +215,19 @@ def get_user_profile(uid):
         if not user_data_list:
             raise ValueError("No user data found")
         user_data = user_data_list[0] # Assuming only one user with given uid
-        user = User.from_dict(user_data)
-        user_profile = user.to_dict()
+        user_profile = user_data
 
         # Check if user is a student
-        response = supabase.from_('students').select("*").eq('student_id', uid).execute()
+        response = supabase.from_('students').select("*").eq('user_id', uid).execute()
         if response.data:
-            student_data_list = response.data
-            if student_data_list:
-                student_data = student_data_list[0]
-                student = Student.from_dict(student_data)
-                user_profile['student'] = student.to_dict()
-            else:
-                user_profile['student'] = None # Student data not found, but user might still be a student record
+            user_profile['student'] = response.data[0]
         else:
             user_profile['student'] = None
 
         # Fetch enrolled courses
-        response = supabase.from_('enrollments').select("*").eq('student_id', uid).execute()
-        enrollments_data = response.data
-        enrolled_courses = []
-        if enrollments_data:
-            for enrollment_data in enrollments_data:
-                course_id = enrollment_data.get('course_id')
-                if course_id:
-                    course_response = supabase.from_('courses').select("*").eq('course_id', course_id).execute()
-                    course_data_list = course_response.data
-                    if course_data_list:
-                        course_data = course_data_list[0]
-                        course = Course.from_dict(course_data)
-                        enrolled_courses.append(course.to_dict())
-        user_profile['enrolled_courses'] = enrolled_courses
+        response = supabase.from_('enrollments').select('*, courses(*)').eq('student_id', uid).execute()
+        user_profile['enrolled_courses'] = [item['courses'] for item in response.data if item.get('courses')]
+        
         return user_profile
 
     except ValueError as ve:

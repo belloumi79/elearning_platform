@@ -187,15 +187,22 @@ def get_assignments_service():
     import logging
     logger = logging.getLogger(__name__)
     logger.info("Fetching assignments list")
-    # Placeholder: Fetch list of assignments from the database
-    # Return some mock data
-    return [
-        {
-            "id": "assign1", "course_id": "course-123", "title": "Intro Assignment",
-            "assignment_type": "homework", "due_date": "2024-12-15T23:59:59"
-        },
-        {
-            "id": "assign2", "course_id": "course-456", "title": "Midterm Exam",
-            "assignment_type": "exam", "due_date": "2024-11-30T12:00:00"
-        }
-    ]
+    
+    try:
+        from app.database.supabase_db import get_supabase_client
+        supabase = get_supabase_client()
+
+        response = supabase.from_('assignments').select('*').execute()
+        logger.info(f"Supabase response: {response}")
+        
+        if hasattr(response, 'data') and response.data:
+            assignments = response.data
+            logger.info(f"Found {len(assignments)} assignments")
+            return assignments
+        else:
+            logger.warning("No assignments data returned from Supabase")
+            return []
+    except Exception as e:
+        logger.error(f"Error fetching assignments from Supabase: {str(e)}", exc_info=True)
+        # Return empty list instead of placeholder data
+        return []

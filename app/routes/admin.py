@@ -1,113 +1,48 @@
 """Admin routes module for the e-learning platform."""
 
-from flask import Blueprint, jsonify, request, render_template, session, current_app
-from app.middleware.auth import require_admin
-from app.services.auth_service import supabase_admin_login
+from flask import Blueprint, jsonify, request, g, current_app
+from app.middleware.auth import require_auth, require_admin
 from app.services.admin_service import (
     get_dashboard_data_service,
     get_students_service,
     create_student_service,
     update_student_service,
     delete_student_service,
+    get_instructors_service,
+    create_instructor_service,
+    delete_instructor_service
+)
+from app.services.courses_service import (
     get_courses_service,
     create_course_service,
     update_course_service,
     delete_course_service,
-    get_instructors_service,
-    create_instructor_service,
-    delete_instructor_service,
     get_course_by_id_service
 )
 from app.services.assignment_service import get_assignments_service
 import logging
-from flask import send_from_directory
 logger = logging.getLogger(__name__)
-admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+admin_bp = Blueprint('admin_api', __name__, url_prefix='/api/v1/admin')
 
-@admin_bp.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory(current_app.static_folder, filename)
-
-@admin_bp.route('/api/login', methods=['POST'])
-def admin_login():
-    """Handle admin login requests."""
-    try:
-        data = request.get_json()
-        if not data or 'email' not in data or 'password' not in data:
-            return jsonify({
-                'error': 'Email and password are required'
-            }), 400
-
-        # Use existing supabase_admin_login function
-        auth_result = supabase_admin_login(data['email'], data['password'])
-        
-        # Store user info and admin status in session
-        session['user'] = {
-            'id': auth_result['uid'],
-            'email': auth_result['email'],
-            'isAdmin': auth_result['isAdmin']
-        }
-        session['access_token'] = auth_result['access_token']
-        # Assuming refresh_token is also returned by supabase_admin_login
-        if 'refresh_token' in auth_result:
-             session['refresh_token'] = auth_result['refresh_token']
-        session.modified = True # Mark session as modified
-
-        logger.info(f"Admin login successful for user {auth_result['user_id']}. Session updated.")
-
-        return jsonify({
-            'success': True,
-            'message': 'Login successful' # No need to send token/user back in JSON if using session
-        }), 200
-
-    except ValueError as e:
-        return jsonify({
-            'error': str(e)
-        }), 401
-    except Exception as e:
-        return jsonify({
-            'error': f'Login failed: {str(e)}'
-        }), 500
-
-@admin_bp.route('/dashboard')
-@require_admin
-def admin_dashboard():
-    """Render the admin dashboard page."""
-    return render_template('admin/dashboard.html')
-
-@admin_bp.route('/students')
-@require_admin
-def admin_students():
-    """Render the student management page with Supabase credentials."""
-    supabase_url = current_app.config.get('SUPABASE_URL')
-    supabase_key = current_app.config.get('SUPABASE_KEY')
-    return render_template('admin/students.html',
-                           supabase_url=supabase_url,
-                           supabase_key=supabase_key)
-
-@admin_bp.route('/courses')
-@require_admin
-def admin_courses():
-    """Render the course management page."""
-    return render_template('admin/courses.html')
+@admin_bp.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({"message": "pong"})
 
 @admin_bp.route('/assignments')
-@require_admin
-def admin_assignments():
-    """Render the main assignments management page."""
-    return render_template('admin/assignments.html')
-
-@admin_bp.route('/api/assignments')
+@require_auth
 @require_admin
 def get_assignments():
     """Get all assignments."""
     try:
+        logger.info(f"Get assignments request received - User: {g.user.get('user_id')}")
         assignments = get_assignments_service()
+        logger.info(f"Returning {len(assignments) if assignments else 0} assignments")
         return jsonify(assignments), 200
     except Exception as e:
-        logger.error(f"Error getting assignments: {str(e)}")
+        logger.error(f"Error getting assignments: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to get assignments'}), 500
-@admin_bp.route('/api/courses/<course_id>/assignments')
+@admin_bp.route('/courses/<course_id>/assignments')
+@require_auth
 @require_admin
 def get_course_assignments_api(course_id):
     """Get assignments for a specific course (admin API)."""
@@ -121,50 +56,9 @@ def get_course_assignments_api(course_id):
         return jsonify({'error': 'Failed to get assignments'}), 500
 
 
-@admin_bp.route('/courses/<course_id>/assignments')
-@require_admin
-def course_assignments(course_id):
-    """Render the assignments management page for a course."""
-    return render_template('admin/assignments.html', course_id=course_id)
 
-@admin_bp.route('/courses/<course_id>/assignments/new', methods=['GET', 'POST'])
-@require_admin
-def new_assignment_form(course_id):
-    """Render the form to create a new assignment for a specific course, or handle form submission."""
-    if request.method == 'POST':
-        # Extract form data
-        title = request.form.get('assignmentTitle')
-        description = request.form.get('assignmentDescription')
-        assignment_type = request.form.get('assignmentType')
-        due_date = request.form.get('dueDate')
-        max_points = request.form.get('maxPoints')
-        # TODO: Handle file uploads and external links if needed
-        try:
-            from app.services.assignment_service import create_assignment
-            assignment = create_assignment(
-                course_id=course_id,
-                title=title,
-                description=description,
-                assignment_type=assignment_type,
-                due_date=due_date,
-                max_points=max_points,
-                # Add file handling and links if needed
-            )
-            return jsonify({'success': True, 'assignment': assignment}), 201
-        except Exception as e:
-            logger = current_app.logger
-            logger.error(f"Error creating assignment: {str(e)}")
-            return jsonify({'error': 'Failed to create assignment'}), 500
-    # GET: render the form
-    return render_template('admin/new_assignment.html', course_id=course_id)
-
-@admin_bp.route('/instructors')
-@require_admin
-def instructors():
-    """Render the instructor management page."""
-    return render_template('admin/instructors.html')
-
-@admin_bp.route('/api/dashboard-data')
+@admin_bp.route('/dashboard-data')
+@require_auth
 @require_admin
 def get_dashboard_data():
     """Get dashboard statistics and data."""
@@ -176,7 +70,8 @@ def get_dashboard_data():
         return jsonify({'error': 'حدث خطأ أثناء جلب بيانات لوحة التحكم'}), 500
 
 
-@admin_bp.route('/api/assignments/recent')
+@admin_bp.route('/assignments/recent')
+@require_auth
 @require_admin
 def recent_assignments():
     """Get all assignments for dashboard."""
@@ -188,7 +83,8 @@ def recent_assignments():
         return jsonify({'error': 'Failed to get assignments'}), 500
 
 
-@admin_bp.route('/api/progress/recent')
+@admin_bp.route('/progress/recent')
+@require_auth
 @require_admin
 def recent_progress():
     """Get recent student progress for dashboard."""
@@ -212,7 +108,8 @@ def recent_progress():
         logger.error(f"Error getting recent progress: {str(e)}")
         return jsonify({'error': 'Failed to get progress data'}), 500
 
-@admin_bp.route('/api/students')
+@admin_bp.route('/students')
+@require_auth
 @require_admin
 def get_students():
     """Get list of all students."""
@@ -226,7 +123,8 @@ def get_students():
         logger.error(f"Error getting students: {str(e)}")
         return jsonify({"error": "Failed to get students"}), 500
 
-@admin_bp.route('/api/students', methods=['POST'])
+@admin_bp.route('/students', methods=['POST'])
+@require_auth
 @require_admin
 def create_student():
     """Create a new student."""
@@ -255,7 +153,8 @@ def create_student():
         logger.error(f"Error creating student: {str(e)}")
         return jsonify({"error": "Failed to create student"}), 500
 
-@admin_bp.route('/api/courses/<course_id>/assignments/<assignment_id>', methods=['PUT'])
+@admin_bp.route('/courses/<course_id>/assignments/<assignment_id>', methods=['PUT'])
+@require_auth
 @require_admin
 def update_assignment(course_id, assignment_id):
     """Update an existing assignment."""
@@ -276,7 +175,8 @@ def update_assignment(course_id, assignment_id):
         logger.error(f"Error updating assignment: {str(e)}")
         return jsonify({"error": "Failed to update assignment"}), 500
 
-@admin_bp.route('/api/students/<student_id>', methods=['DELETE'])
+@admin_bp.route('/students/<student_id>', methods=['DELETE'])
+@require_auth
 @require_admin
 def delete_student(student_id):
     """Delete a student."""
@@ -289,7 +189,8 @@ def delete_student(student_id):
         logger.error(f"Error deleting student: {str(e)}")
         return jsonify({"error": "Failed to delete student"}), 500
 
-@admin_bp.route('/api/students/<student_id>', methods=['GET'])
+@admin_bp.route('/students/<student_id>', methods=['GET'])
+@require_auth
 @require_admin
 def get_student(student_id):
     """Get a specific student by ID."""
@@ -330,7 +231,8 @@ def get_student(student_id):
     return jsonify({"error": "Endpoint not fully implemented for Supabase yet"}), 501
 
 
-@admin_bp.route('/api/students/<student_id>', methods=['PUT'])
+@admin_bp.route('/students/<student_id>', methods=['PUT'])
+@require_auth
 @require_admin
 def update_student(student_id):
     """Update a student's information."""
@@ -356,7 +258,8 @@ def update_student(student_id):
         logger.error(f"Route error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
-@admin_bp.route('/api/courses')
+@admin_bp.route('/courses')
+@require_auth
 @require_admin
 def get_courses():
     """Get list of all courses."""
@@ -367,7 +270,8 @@ def get_courses():
         logger.error(f"Error getting courses: {str(e)}")
         return jsonify({"error": "Failed to get courses"}), 500
 
-@admin_bp.route('/api/courses', methods=['POST'])
+@admin_bp.route('/courses', methods=['POST'])
+@require_auth
 @require_admin
 def create_course():
     """Create a new course."""
@@ -420,7 +324,8 @@ def create_course():
         logger.error(f"Error creating course: {str(e)}")
         return jsonify({"error": "Failed to create course"}), 500
 
-@admin_bp.route('/api/courses/<course_id>', methods=['GET'])
+@admin_bp.route('/courses/<course_id>', methods=['GET'])
+@require_auth
 @require_admin
 def get_course(course_id):
     """Get a specific course by ID."""
@@ -433,7 +338,8 @@ def get_course(course_id):
         logger.error(f"Error getting course: {str(e)}")
         return jsonify({"error": "Failed to get course"}), 500
 
-@admin_bp.route('/api/courses/<course_id>', methods=['PUT'])
+@admin_bp.route('/courses/<course_id>', methods=['PUT'])
+@require_auth
 @require_admin
 def update_course(course_id):
     """Update a course."""
@@ -487,7 +393,8 @@ def update_course(course_id):
         logger.error(f"Error updating course: {str(e)}")
         return jsonify({"error": "Failed to update course"}), 500
 
-@admin_bp.route('/api/courses/<course_id>', methods=['DELETE'])
+@admin_bp.route('/courses/<course_id>', methods=['DELETE'])
+@require_auth
 @require_admin
 def delete_course(course_id):
     """Delete a course."""
@@ -500,7 +407,8 @@ def delete_course(course_id):
         logger.error(f"Error deleting course: {str(e)}")
         return jsonify({"error": "Failed to delete course"}), 500
 
-@admin_bp.route('/api/instructors', methods=['GET'])
+@admin_bp.route('/instructors', methods=['GET'])
+@require_auth
 @require_admin
 def get_instructors():
     """Get list of all instructors."""
@@ -511,7 +419,8 @@ def get_instructors():
         logger.error(f"Error getting instructors: {str(e)}")
         return jsonify({'error': 'حدث خطأ أثناء جلب بيانات المدرسين'}), 500
 
-@admin_bp.route('/api/instructors', methods=['POST'])
+@admin_bp.route('/instructors', methods=['POST'])
+@require_auth
 @require_admin
 def add_instructor():
     """Create a new instructor."""
@@ -558,7 +467,8 @@ def add_instructor():
         logger.error(f"Error creating instructor: {str(e)}")
         return jsonify({'error': 'حدث خطأ أثناء إنشاء المدرس'}), 500
 
-@admin_bp.route('/api/instructors/<email>', methods=['DELETE'])
+@admin_bp.route('/instructors/<email>', methods=['DELETE'])
+@require_auth
 @require_admin
 def delete_instructor(email):
     """Delete an instructor."""
