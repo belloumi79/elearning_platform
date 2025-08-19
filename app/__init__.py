@@ -1,5 +1,5 @@
 import logging
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import timedelta
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -20,8 +20,29 @@ def create_app(config_name=None):
     # Configure secret key
     app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 
-    # Configure CORS for the new API structure
-    CORS(app, resources={r"/api/v1/*": {"origins": "*"}}) # Allow all origins for now
+    # Remplacez les origines ci‑dessous par votre(s) domaine(s) frontend exact(s).
+    # N'utilisez PAS '*' si vous activez supports_credentials=True.
+    allowed_origins = [
+        "https://elearning-platform-7l0x.onrender.com",        # production frontend (Render)
+        "http://localhost:5173",                              # Vite dev
+        "https://9000-monospace-iqrawartqui-academy-...cloudworkstations.dev"  # votre dev host exact si nécessaire
+    ]
+
+    CORS(
+        app,
+        resources={r"/api/v1/*": {"origins": allowed_origins}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization", "Accept"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    )
+
+    # Ensure preflight requests are handled early and not redirected by auth middleware
+    @app.before_request
+    def handle_options_and_bypass_auth_for_preflight():
+        # If a browser sends an OPTIONS preflight, return 204 directly
+        if request.method == 'OPTIONS':
+            # Flask-CORS will add the appropriate Access-Control-Allow-* headers
+            return "", 204
 
     # Configure logging
     from config.logging_config import init_logging
