@@ -16,7 +16,7 @@ Routes:
 
 from flask import Blueprint, jsonify, request, current_app
 import logging
-from app.services.auth_service import supabase_admin_login
+from app.services.auth_service import supabase_admin_login, get_enhanced_user_data
 from app.services.jwt_service import create_access_token, create_refresh_token, decode_token
 
 logger = logging.getLogger(__name__)
@@ -38,14 +38,17 @@ def login():
             return jsonify({"error": "Email and password are required"}), 400
 
         # The supabase_admin_login function can be used for any user login.
-        # It returns user data, including an 'isAdmin' flag.
-        user_data = supabase_admin_login(email, password)
+        # It returns user data, including an 'isAdmin' flag and enhanced user info.
+        auth_response = supabase_admin_login(email, password)
 
+        # Extract user data for the response
+        user_info = auth_response.get('user', {})
+        
         # Prepare data for JWT payload
         jwt_payload = {
-            'user_id': user_data['uid'],
-            'email': user_data['email'],
-            'isAdmin': user_data.get('isAdmin', False)
+            'user_id': auth_response['uid'],
+            'email': auth_response['email'],
+            'isAdmin': auth_response.get('isAdmin', False)
         }
 
         # Generate tokens
@@ -55,7 +58,8 @@ def login():
         return jsonify({
             'access_token': access_token,
             'refresh_token': refresh_token,
-            'token_type': 'bearer'
+            'token_type': 'bearer',
+            'user': user_info
         })
 
     except ValueError as e:
@@ -91,10 +95,14 @@ def refresh():
         }
 
         new_access_token = create_access_token(data=new_access_token_payload)
+        
+        # Get enhanced user data for consistency
+        enhanced_user_data = get_enhanced_user_data(payload['user_id'])
 
         return jsonify({
             'access_token': new_access_token,
-            'token_type': 'bearer'
+            'token_type': 'bearer',
+            'user': enhanced_user_data
         })
 
     except Exception as e:

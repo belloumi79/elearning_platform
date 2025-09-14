@@ -104,13 +104,16 @@ def supabase_admin_login(email, password):
                 
                 if admin_check_response.data and len(admin_check_response.data) > 0:
                     logger.info(f"User {uid} confirmed as admin.")
+                    # Get enhanced user data
+                    enhanced_user_data = get_enhanced_user_data(uid)
                     # Return necessary user info for session
                     return {
                         'uid': uid,
                         'email': user.email,
                         'isAdmin': True,
                         'access_token': response.session.access_token,
-                        'refresh_token': response.session.refresh_token
+                        'refresh_token': response.session.refresh_token,
+                        'user': enhanced_user_data
                     }
                 else:
                     logger.warning(f"User {uid} authenticated but is not an admin.")
@@ -136,6 +139,149 @@ def supabase_admin_login(email, password):
             raise e
         else:
             raise Exception(f"An unexpected error occurred: {str(e)}")
+
+
+def get_enhanced_user_data(user_id: str):
+    """
+    Retrieve comprehensive user data from all relevant tables.
+    
+    Args:
+        user_id (str): Supabase Auth user ID
+        
+    Returns:
+        dict: Enhanced user data with profile information
+    """
+    try:
+        logger.info(f"Fetching enhanced user data for user_id: {user_id}")
+        
+        # Initialize user data with defaults
+        user_data = {
+            'id': user_id,
+            'email': '',
+            'name': '',
+            'firstName': '',
+            'lastName': '',
+            'phone': '',
+            'isAdmin': False,
+            'status': 'active',
+            'role': 'user',
+            'created_at': None,
+            'last_sign_in_at': None,
+            'profile_type': 'unknown',
+            'profile_id': None
+        }
+        
+        # Get basic user data from Supabase Auth
+        try:
+            # Use the public client to get user session info
+            SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+            if not SUPABASE_ANON_KEY:
+                raise ValueError("Supabase ANON_KEY must be set in environment variables")
+            
+            public_supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+            user_response = public_supabase.auth.get_user()
+            
+            if user_response.user and str(user_response.user.id) == str(user_id):
+                auth_user = user_response.user
+                user_data.update({
+                    'email': auth_user.email or '',
+                    'created_at': auth_user.created_at.isoformat() if auth_user.created_at else None,
+                    'last_sign_in_at': auth_user.last_sign_in_at.isoformat() if auth_user.last_sign_in_at else None,
+                    'role': getattr(auth_user, 'role', 'user')
+                })
+        except Exception as auth_error:
+            logger.warning(f"Could not fetch auth user data: {str(auth_error)}")
+            # Continue with basic user data if auth query fails
+        
+        # Check admin profile
+        try:
+            admin_response = supabase.from_('admins').select("*").eq('user_id', user_id).execute()
+            if admin_response.data and len(admin_response.data) > 0:
+                admin_record = admin_response.data[0]
+                user_data.update({
+                    'name': admin_record.get('email', '').split('@')[0],  # Fallback name from email
+                    'isAdmin': True,
+                    'profile_type': 'admin',
+                    'profile_id': admin_record['id'],
+                    'status': admin_record.get('status', 'active'),
+                    'created_at': admin_record.get('created_at'),
+                    'updated_at': admin_record.get('updated_at')
+                })
+                logger.info(f"Found admin profile for user {user_id}")
+        except Exception as admin_error:
+            logger.warning(f"Error fetching admin profile: {str(admin_error)}")
+        
+        # Check student profile (only if not already found as admin)
+        if not user_data['isAdmin']:
+            try:
+                student_response = supabase.from_('students').select("*").eq('user_id', user_id).execute()
+                if student_response.data and len(student_response.data) > 0:
+                    student_record = student_response.data[0]
+                    user_data.update({
+                        'name': student_record.get('name', ''),
+                        'phone': student_record.get('phone', ''),
+                        'isAdmin': False,
+                        'profile_type': 'student',
+                        'profile_id': student_record['id'],
+                        'status': student_record.get('status', 'active'),
+                        'created_at': student_record.get('created_at'),
+                        'updated_at': student_record.get('updated_at')
+                    })
+                    logger.info(f"Found student profile for user {user_id}")
+            except Exception as student_error:
+                logger.warning(f"Error fetching student profile: {str(student_error)}")
+        
+        # Check instructor profile (only if not already found as admin or student)
+        if user_data['profile_type'] == 'unknown':
+            try:
+                instructor_response = supabase.from_('instructors').select("*").eq('user_id', user_id).execute()
+                if instructor_response.data and len(instructor_response.data) > 0:
+                    instructor_record = instructor_response.data[0]
+                    user_data.update({
+                        'name': instructor_record.get('name', ''),
+                        'phone': instructor_record.get('phone', ''),
+                        'isAdmin': False,
+                        'profile_type': 'instructor',
+                        'profile_id': instructor_record['id'],
+                        'status': instructor_record.get('status', 'active'),
+                        'created_at': instructor_record.get('created_at'),
+                        'updated_at': instructor_record.get('updated_at')
+                    })
+                    logger.info(f"Found instructor profile for user {user_id}")
+            except Exception as instructor_error:
+                logger.warning(f"Error fetching instructor profile: {str(instructor_error)}")
+        
+        # Parse name into first and last name if available
+        if user_data.get('name'):
+            name_parts = user_data['name'].split()
+            if len(name_parts) >= 2:
+                user_data['firstName'] = ' '.join(name_parts[:-1])
+                user_data['lastName'] = name_parts[-1]
+            else:
+                user_data['firstName'] = user_data['name']
+                user_data['lastName'] = ''
+        
+        logger.info(f"Successfully fetched enhanced user data for user {user_id}")
+        return user_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching enhanced user data: {str(e)}", exc_info=True)
+        # Return basic user data as fallback
+        return {
+            'id': user_id,
+            'email': 'unknown@example.com',
+            'name': '',
+            'firstName': '',
+            'lastName': '',
+            'phone': '',
+            'isAdmin': False,
+            'status': 'active',
+            'role': 'user',
+            'created_at': None,
+            'last_sign_in_at': None,
+            'profile_type': 'unknown',
+            'profile_id': None
+        }
 
 
 # Removed verify_admin_token function as it's replaced by supabase_admin_login
