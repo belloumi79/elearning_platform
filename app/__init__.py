@@ -20,13 +20,12 @@ def create_app(config_name=None):
     # Configure secret key
     app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 
-    # Remplacez les origines ci‑dessous par votre(s) domaine(s) frontend exact(s).
-    # N'utilisez PAS '*' si vous activez supports_credentials=True.
+    # Replace the origins below with your exact frontend domain(s).
+    # DO NOT use '*' if you enable supports_credentials=True.
     allowed_origins = [
         "https://elearning-platform-7l0x.onrender.com",        # production frontend (Render)
         "http://localhost:5173",                              # Vite dev
-        "https://9000-monospace-iqrawartqui-academy-...cloudworkstations.dev"  # votre dev host exact si nécessaire
-        "https://9000-monospace-iqrawartqui-academy-1712137068075.cluster-nxnw2gov3naqkvuxb437f67u5e.cloudworkstations.dev)."
+        "https://9000-monospace-iqrawartqui-academy-1712137068075.cluster-nxnw2gov3naqkvuxb437f67u5e.cloudworkstations.dev"  # Cloud Workstations dev frontend
     ]
 
     CORS(
