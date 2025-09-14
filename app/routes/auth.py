@@ -52,7 +52,8 @@ def login():
         jwt_payload = {
             'user_id': auth_response['uid'],
             'email': auth_response['email'],
-            'isAdmin': auth_response.get('isAdmin', False)
+            'isAdmin': auth_response.get('isAdmin', False),
+            'role': user_info.get('role', 'user')
         }
 
         # Generate tokens
@@ -95,7 +96,8 @@ def refresh():
         new_access_token_payload = {
             'user_id': payload['user_id'],
             'email': payload['email'],
-            'isAdmin': payload.get('isAdmin', False)
+            'isAdmin': payload.get('isAdmin', False),
+            'role': payload.get('role', 'user')
         }
 
         new_access_token = create_access_token(data=new_access_token_payload)

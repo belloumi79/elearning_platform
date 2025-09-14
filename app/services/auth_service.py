@@ -180,6 +180,7 @@ def get_enhanced_user_data(user_id: str, email: str = ""):
                 user_data.update({
                     'name': admin_record.get('email', '').split('@')[0],  # Fallback name from email
                     'isAdmin': True,
+                    'role': 'admin',
                     'profile_type': 'admin',
                     'profile_id': admin_record['id'],
                     'status': admin_record.get('status', 'active'),
@@ -200,6 +201,7 @@ def get_enhanced_user_data(user_id: str, email: str = ""):
                         'name': student_record.get('name', ''),
                         'phone': student_record.get('phone', ''),
                         'isAdmin': False,
+                        'role': 'student',
                         'profile_type': 'student',
                         'profile_id': student_record['id'],
                         'status': student_record.get('status', 'active'),
@@ -220,6 +222,7 @@ def get_enhanced_user_data(user_id: str, email: str = ""):
                         'name': instructor_record.get('name', ''),
                         'phone': instructor_record.get('phone', ''),
                         'isAdmin': False,
+                        'role': 'instructor',
                         'profile_type': 'instructor',
                         'profile_id': instructor_record['id'],
                         'status': instructor_record.get('status', 'active'),
