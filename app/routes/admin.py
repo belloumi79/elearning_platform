@@ -19,7 +19,8 @@ from app.services.courses_service import (
     delete_course_service,
     get_course_by_id_service
 )
-from app.services.assignment_service import get_assignments_service
+from app.services.assignment_service import get_assignments_service, update_assignment
+from app.database.supabase_db import get_supabase_client
 import logging
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin_api', __name__, url_prefix='/api/v1/admin')
@@ -164,8 +165,8 @@ def update_assignment(course_id, assignment_id):
             return jsonify({"error": "No data provided for update"}), 400
 
         logger.info(f"Attempting to update assignment {assignment_id} in course {course_id}")
-        # Assuming update_assignment_service takes assignment_id and data
-        updated_assignment = update_assignment_service(assignment_id, data)
+        # Assuming update_assignment takes assignment_id and data
+        updated_assignment = update_assignment(assignment_id, data)
         return jsonify(updated_assignment), 200
 
     except ValueError as e:
