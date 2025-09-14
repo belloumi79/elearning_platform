@@ -105,7 +105,7 @@ def supabase_admin_login(email, password):
                 if admin_check_response.data and len(admin_check_response.data) > 0:
                     logger.info(f"User {uid} confirmed as admin.")
                     # Get enhanced user data
-                    enhanced_user_data = get_enhanced_user_data(uid)
+                    enhanced_user_data = get_enhanced_user_data(uid, user.email)
                     # Return necessary user info for session
                     return {
                         'uid': uid,
@@ -141,12 +141,13 @@ def supabase_admin_login(email, password):
             raise Exception(f"An unexpected error occurred: {str(e)}")
 
 
-def get_enhanced_user_data(user_id: str):
+def get_enhanced_user_data(user_id: str, email: str = ""):
     """
     Retrieve comprehensive user data from all relevant tables.
     
     Args:
         user_id (str): Supabase Auth user ID
+        email (str): User's email (optional, can be passed from authenticated user)
         
     Returns:
         dict: Enhanced user data with profile information
@@ -157,7 +158,7 @@ def get_enhanced_user_data(user_id: str):
         # Initialize user data with defaults
         user_data = {
             'id': user_id,
-            'email': '',
+            'email': email or '',  # Use the passed email parameter
             'name': '',
             'firstName': '',
             'lastName': '',
@@ -170,28 +171,6 @@ def get_enhanced_user_data(user_id: str):
             'profile_type': 'unknown',
             'profile_id': None
         }
-        
-        # Get basic user data from Supabase Auth
-        try:
-            # Use the public client to get user session info
-            SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
-            if not SUPABASE_ANON_KEY:
-                raise ValueError("Supabase ANON_KEY must be set in environment variables")
-            
-            public_supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-            user_response = public_supabase.auth.get_user()
-            
-            if user_response.user and str(user_response.user.id) == str(user_id):
-                auth_user = user_response.user
-                user_data.update({
-                    'email': auth_user.email or '',
-                    'created_at': auth_user.created_at.isoformat() if auth_user.created_at else None,
-                    'last_sign_in_at': auth_user.last_sign_in_at.isoformat() if auth_user.last_sign_in_at else None,
-                    'role': getattr(auth_user, 'role', 'user')
-                })
-        except Exception as auth_error:
-            logger.warning(f"Could not fetch auth user data: {str(auth_error)}")
-            # Continue with basic user data if auth query fails
         
         # Check admin profile
         try:

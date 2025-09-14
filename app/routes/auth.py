@@ -44,6 +44,10 @@ def login():
         # Extract user data for the response
         user_info = auth_response.get('user', {})
         
+        # Ensure email is properly set in user_info if it's missing
+        if not user_info.get('email') and email:
+            user_info['email'] = email
+        
         # Prepare data for JWT payload
         jwt_payload = {
             'user_id': auth_response['uid'],
