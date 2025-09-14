@@ -359,4 +359,78 @@ def get_user_profile(uid):
         raise ve
     except Exception as e:
         logger.error(f"Error fetching user profile: {str(e)}")
+def adapt_user_json_to_database(user_json):
+    """
+    Adapt user JSON object to database structure.
+
+    Args:
+        user_json (dict): User JSON object from auth response
+
+    Returns:
+        dict: Database adaptation info with table name and data
+    """
+    try:
+        logger.info(f"Adapting user JSON for profile_type: {user_json.get('profile_type')}")
+
+        profile_type = user_json.get('profile_type')
+        profile_id = user_json.get('profile_id')
+        user_id = user_json.get('id')
+        email = user_json.get('email')
+        created_at = user_json.get('created_at')
+
+        if profile_type == 'admin':
+            # Adapt for admins table
+            admin_data = {
+                'id': profile_id,
+                'user_id': user_id,
+                'email': email,
+                'created_at': created_at,
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            return {
+                'table': 'admins',
+                'data': admin_data,
+                'operation': 'upsert'  # Insert or update on conflict
+            }
+        elif profile_type == 'student':
+            # Adapt for students table
+            student_data = {
+                'id': profile_id,
+                'user_id': user_id,
+                'name': user_json.get('name', ''),
+                'email': email,
+                'phone': user_json.get('phone'),
+                'status': user_json.get('status', 'active'),
+                'created_at': created_at,
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            return {
+                'table': 'students',
+                'data': student_data,
+                'operation': 'upsert'
+            }
+        elif profile_type == 'instructor':
+            # Adapt for instructors table
+            instructor_data = {
+                'id': profile_id,
+                'user_id': user_id,
+                'name': user_json.get('name', ''),
+                'email': email,
+                'phone': user_json.get('phone'),
+                'status': user_json.get('status', 'active'),
+                'created_at': created_at,
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            return {
+                'table': 'instructors',
+                'data': instructor_data,
+                'operation': 'upsert'
+            }
+        else:
+            logger.warning(f"Unknown profile_type: {profile_type}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error adapting user JSON: {str(e)}")
+        raise
         raise
