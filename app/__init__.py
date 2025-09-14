@@ -26,6 +26,7 @@ def create_app(config_name=None):
         "https://elearning-platform-7l0x.onrender.com",        # production frontend (Render)
         "http://localhost:5173",                              # Vite dev
         "https://9000-monospace-iqrawartqui-academy-...cloudworkstations.dev"  # votre dev host exact si nécessaire
+        "https://9000-monospace-iqrawartqui-academy-1712137068075.cluster-nxnw2gov3naqkvuxb437f67u5e.cloudworkstations.dev)."
     ]
 
     CORS(
