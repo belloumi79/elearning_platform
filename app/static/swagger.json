@@ -25,6 +25,121 @@
     }
   ],
   "paths": {
+    "/auth/signup": {
+      "post": {
+        "summary": "Student Registration",
+        "description": "Creates a new student account with email and password.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "student@example.com",
+                    "description": "Student's email address"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 6,
+                    "example": "securepassword123",
+                    "description": "Password (minimum 6 characters)"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "John Doe",
+                    "description": "Student's full name (optional)"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "example": "+1234567890",
+                    "description": "Student's phone number (optional)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Student account created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": {
+                      "type": "string",
+                      "description": "JWT access token"
+                    },
+                    "refresh_token": {
+                      "type": "string",
+                      "description": "JWT refresh token"
+                    },
+                    "token_type": {
+                      "type": "string",
+                      "example": "bearer"
+                    },
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "User ID"
+                        },
+                        "email": {
+                          "type": "string",
+                          "description": "User email"
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "User name"
+                        },
+                        "role": {
+                          "type": "string",
+                          "example": "student"
+                        },
+                        "profile_type": {
+                          "type": "string",
+                          "example": "student"
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Student account created successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Email already exists"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/auth/login": {
       "post": {
         "summary": "User Login",
