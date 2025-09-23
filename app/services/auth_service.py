@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from supabase import create_client, Client
 import os
+from app.services.jwt_service import create_access_token, create_refresh_token
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +271,129 @@ def get_enhanced_user_data(user_id: str, email: str = ""):
 
 
 # Removed create_admin_user function as the route was removed
+
+
+def signup_student(email: str, password: str, name: str = None, phone: str = None):
+    """
+    Sign up a new student user with email and password.
+
+    Args:
+        email (str): Student's email address
+        password (str): Student's password
+        name (str, optional): Student's full name
+        phone (str, optional): Student's phone number
+
+    Returns:
+        dict: User information including tokens and profile data
+
+    Raises:
+        ValueError: If email already exists, invalid data, or signup fails
+        Exception: For other Supabase or unexpected errors
+    """
+    try:
+        logger.info(f"Attempting to sign up student with email: {email}")
+
+        # Validate required fields
+        if not email or not password:
+            raise ValueError("Email and password are required")
+
+        # Basic email validation
+        if "@" not in email or "." not in email:
+            raise ValueError("Invalid email format")
+
+        # Basic password validation (minimum 6 characters)
+        if len(password) < 6:
+            raise ValueError("Password must be at least 6 characters long")
+
+        # Set default name if not provided
+        if not name:
+            name = email.split('@')[0]  # Use email prefix as default name
+
+        # 1. Create user in Supabase Auth using admin API
+        try:
+            auth_response = supabase.auth.admin.create_user({
+                "email": email,
+                "password": password,
+                "email_confirm": True  # Auto-confirm email for simplicity
+            })
+
+            if auth_response.user:
+                user_id = auth_response.user.id
+                logger.info(f"Supabase Auth user created successfully: {user_id}")
+            else:
+                error_message = "Failed to create auth user"
+                if hasattr(auth_response, 'error') and auth_response.error:
+                    error_message = auth_response.error.message
+                raise ValueError(error_message)
+
+        except Exception as auth_error:
+            logger.error(f"Error creating auth user: {str(auth_error)}")
+            if "already registered" in str(auth_error).lower() or "email already exists" in str(auth_error).lower():
+                raise ValueError("Email already exists")
+            raise ValueError(f"Failed to create user account: {str(auth_error)}")
+
+        # 2. Create student record in database
+        try:
+            student_data = {
+                'user_id': user_id,
+                'name': name,
+                'email': email,
+                'phone': phone,
+                'status': 'active'
+            }
+
+            student_response = supabase.from_('students').insert(student_data).execute()
+
+            if not student_response.data:
+                # Clean up: delete the auth user if student creation failed
+                try:
+                    supabase.auth.admin.delete_user(user_id)
+                except:
+                    pass  # Ignore cleanup errors
+                raise ValueError("Failed to create student profile")
+
+            student_record = student_response.data[0]
+            logger.info(f"Student profile created successfully: {student_record['id']}")
+
+        except Exception as db_error:
+            # Clean up: delete the auth user if student creation failed
+            try:
+                supabase.auth.admin.delete_user(user_id)
+            except:
+                pass  # Ignore cleanup errors
+            logger.error(f"Error creating student profile: {str(db_error)}")
+            raise ValueError(f"Failed to create student profile: {str(db_error)}")
+
+        # 3. Generate JWT tokens for immediate login
+        jwt_payload = {
+            'user_id': user_id,
+            'email': email,
+            'isAdmin': False,
+            'role': 'student'
+        }
+
+        access_token = create_access_token(data=jwt_payload)
+        refresh_token = create_refresh_token(data=jwt_payload)
+
+        # 4. Get enhanced user data
+        enhanced_user_data = get_enhanced_user_data(user_id, email)
+
+        logger.info(f"Student signup completed successfully for email: {email}")
+
+        return {
+            'uid': user_id,
+            'email': email,
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'user': enhanced_user_data
+        }
+
+    except ValueError as ve:
+        logger.warning(f"Student signup validation error for {email}: {str(ve)}")
+        raise ve
+    except Exception as e:
+        logger.error(f"Unexpected error during student signup for {email}: {str(e)}", exc_info=True)
+        raise Exception(f"An unexpected error occurred: {str(e)}")
 
 
 def signup_with_gmail(access_token):

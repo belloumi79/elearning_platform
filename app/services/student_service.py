@@ -15,14 +15,15 @@ def get_student_profile(student_id: str):
     """
     try:
         supabase = get_supabase_client()
-        response = supabase.from_('students').select('*').eq('id', student_id).single().execute()
+        response = supabase.from_('students').select('*').eq('id', student_id).maybe_single().execute()
         
         if not response.data:
+            logger.info(f"Student profile not found for student_id: {student_id}")
             return None
             
         return response.data
     except Exception as e:
-        logger.error(f"Error fetching profile for student {student_id}: {str(e)}", exc_info=True)
+        logger.error(f"Database error fetching profile for student {student_id}: {str(e)}", exc_info=True)
         raise
 
 def update_student_profile(student_id: str, data: dict):
@@ -43,10 +44,14 @@ def update_student_profile(student_id: str, data: dict):
 
         # After update, fetch the updated record to return it
         if response.data:
-            updated_profile_response = supabase.from_('students').select('*').eq('id', student_id).single().execute()
+            updated_profile_response = supabase.from_('students').select('*').eq('id', student_id).maybe_single().execute()
+            if not updated_profile_response.data:
+                logger.warning(f"Student profile not found after update for student_id: {student_id}")
+                raise ValueError("Student not found after update.")
             return updated_profile_response.data
         else:
             # This case might indicate the student_id didn't exist
+            logger.warning(f"Student not found for update, student_id: {student_id}")
             raise ValueError("Student not found or update failed.")
 
     except ValueError as ve:

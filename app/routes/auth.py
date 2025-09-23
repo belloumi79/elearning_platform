@@ -16,7 +16,7 @@ Routes:
 
 from flask import Blueprint, jsonify, request, current_app
 import logging
-from app.services.auth_service import supabase_admin_login, get_enhanced_user_data
+from app.services.auth_service import supabase_admin_login, get_enhanced_user_data, signup_student
 from app.services.jwt_service import create_access_token, create_refresh_token, decode_token
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,44 @@ def login():
         return jsonify({"error": str(e)}), 401
     except Exception as e:
         logger.error(f"An unexpected error occurred during login: {str(e)}", exc_info=True)
+        return jsonify({"error": "An internal server error occurred."}), 500
+
+@auth_bp.route('/signup', methods=['POST'])
+def signup():
+    """
+    Register a new student user with email and password.
+    Returns JWT access and refresh tokens upon successful registration.
+    """
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        name = data.get('name')
+        phone = data.get('phone')
+
+        if not email or not password:
+            return jsonify({"error": "Email and password are required"}), 400
+
+        # Register the student
+        signup_response = signup_student(email, password, name, phone)
+
+        # Prepare response data
+        user_info = signup_response.get('user', {})
+
+        return jsonify({
+            'access_token': signup_response['access_token'],
+            'refresh_token': signup_response['refresh_token'],
+            'token_type': 'bearer',
+            'user': user_info,
+            'message': 'Student account created successfully'
+        }), 201
+
+    except ValueError as e:
+        # This can be raised from signup_student for validation errors
+        logger.warning(f"Signup failed for email {email}: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during signup: {str(e)}", exc_info=True)
         return jsonify({"error": "An internal server error occurred."}), 500
 
 @auth_bp.route('/refresh', methods=['POST'])

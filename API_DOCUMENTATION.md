@@ -14,7 +14,45 @@ La documentation technique complète et interactive de chaque point de terminais
 
 L'API utilise une authentification par token **JWT (JSON Web Token)**. C'est un processus en deux étapes :
 
-### Étape A : Connexion de l'utilisateur
+### Étape A : Inscription d'un nouvel étudiant
+
+- **Endpoint :** `POST /api/v1/auth/signup`
+- **Description :** Crée un nouveau compte étudiant avec email et mot de passe.
+- **Corps de la requête :**
+  ```json
+  {
+    "email": "votre.email@example.com",
+    "password": "mot_de_passe_sécurisé",
+    "name": "Votre Nom Complet",
+    "phone": "+1234567890"
+  }
+  ```
+- **Paramètres :**
+  - `email` (requis) : Adresse email valide
+  - `password` (requis) : Mot de passe d'au moins 6 caractères
+  - `name` (optionnel) : Nom complet de l'étudiant
+  - `phone` (optionnel) : Numéro de téléphone
+- **Réponse en cas de succès (201 Created) :**
+  ```json
+  {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "bearer",
+    "user": {
+      "id": "user_id",
+      "email": "votre.email@example.com",
+      "name": "Votre Nom Complet",
+      "role": "student",
+      "profile_type": "student"
+    },
+    "message": "Student account created successfully"
+  }
+  ```
+- **Erreurs possibles :**
+  - `400 Bad Request` : Email ou mot de passe manquant, email déjà existant, mot de passe trop court
+  - `500 Internal Server Error` : Erreur serveur
+
+### Étape B : Connexion de l'utilisateur
 
 - **Endpoint :** `POST /api/v1/auth/login`
 - **Description :** Authentifie un utilisateur (étudiant ou admin) avec son email et son mot de passe.
