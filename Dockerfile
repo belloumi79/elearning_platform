@@ -7,6 +7,6 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-COPY config/serviceAccountKey.json /app/config/serviceAccountKey.json
+# Firebase credentials are no longer used; removed COPY of serviceAccountKey.json
 
 CMD ["gunicorn", "run:app"]

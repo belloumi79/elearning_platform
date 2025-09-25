@@ -6,8 +6,6 @@ from flask_swagger_ui import get_swaggerui_blueprint
 import os
 import secrets
 from dotenv import load_dotenv
-# Removed: import firebase_admin
-# Removed: from firebase_admin import credentials
 from flask import redirect, url_for
 
 def create_app(config_name=None):
@@ -63,7 +61,6 @@ def create_app(config_name=None):
         except Exception as e:
             logger.warning(f"Could not clean test files: {str(e)}")
 
-    # Removed Firebase Admin SDK initialization block
 
     # Handle favicon requests
     @app.route('/favicon.ico')

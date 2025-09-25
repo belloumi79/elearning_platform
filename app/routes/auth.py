@@ -9,9 +9,6 @@ Routes:
     - /admin/login: Admin login page (renders template)
     - /api/admin/login: Handle admin login using email/password (Supabase)
     - /admin/logout: Clear admin session
-    # - /setup/admin/<email>: Create initial admin user (Firebase - REMOVED)
-    # - /api/signup: User signup (Firebase - REMOVED)
-    # - /api/user/profile/<uid>: Get user profile (Firebase - NEEDS REFACTOR)
 """
 
 from flask import Blueprint, jsonify, request, current_app
@@ -113,6 +110,11 @@ def signup():
         logger.error(f"An unexpected error occurred during signup: {str(e)}", exc_info=True)
         return jsonify({"error": "An internal server error occurred."}), 500
 
+@auth_bp.route('/register', methods=['POST'])
+def register():
+    """Backward-compatible alias for front-ends using /register."""
+    return signup()
+
 @auth_bp.route('/refresh', methods=['POST'])
 def refresh():
     """
@@ -154,24 +156,3 @@ def refresh():
         return jsonify({"error": "An internal server error occurred."}), 500
 
 
-# @auth_bp.route('/api/signup', methods=['POST']) # Firebase specific - Removed
-# def signup():
-#     """Sign up a new user. (Firebase version - REMOVED)"""
-#     # ... (Firebase code removed) ...
-#     pass
-
-
-# @auth_bp.route('/api/user/profile/<uid>', methods=['GET']) # Needs refactoring for Supabase
-# def get_user_profile_route(uid):
-#     """Get user profile. (Needs refactoring for Supabase)"""
-#     # try:
-#     #     from app.services.auth_service import get_user_profile_supabase
-#     #     user_profile = get_user_profile_supabase(uid)
-#     #     return jsonify(user_profile)
-#     # except Exception as e:
-#     #     logger.error(f"Error fetching user profile: {str(e)}")
-#     #     return jsonify({
-#     #         'success': False,
-#     #         'error': str(e)
-#     #     }), 500
-#     return jsonify({"message": "Route needs refactoring for Supabase"}), 501

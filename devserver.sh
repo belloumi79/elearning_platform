@@ -1,4 +1,4 @@
 #!/bin/sh
 source myvenv/bin/activate
-export GOOGLE_APPLICATION_CREDENTIALS=/home/user/elearning_platform/config/serviceAccountKey.json
-python -m flask --app /home/user/elearning_platform/run run -p $PORT
+# Firebase GOOGLE_APPLICATION_CREDENTIALS removed; we use Supabase.
+python -m flask --app run run -p ${PORT:-5000}
