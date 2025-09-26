@@ -101,10 +101,10 @@ def supabase_admin_login(email, password):
             # 2. Verify if the user is listed in the 'admins' table using the service client
             try:
                 logger.info(f"Checking 'admins' table for user_id: {uid}")
-                admin_check_response = supabase.from_('admins').select("user_id").eq('user_id', uid).execute()
+                admin_check_response = supabase.from_('admins').select("user_id,email,id").eq('user_id', uid).execute()
                 
                 if admin_check_response.data and len(admin_check_response.data) > 0:
-                    logger.info(f"User {uid} confirmed as admin.")
+                    logger.info(f"User {uid} confirmed as admin (match by user_id).")
                     # Get enhanced user data
                     enhanced_user_data = get_enhanced_user_data(uid, user.email)
                     # Return necessary user info for session
@@ -117,6 +117,26 @@ def supabase_admin_login(email, password):
                         'user': enhanced_user_data
                     }
                 else:
+                    # Fallback: check admin by email and auto-heal user_id if needed
+                    logger.warning(f"Admin check by user_id failed for {uid}. Trying email fallback: {user.email}")
+                    by_email = supabase.from_('admins').select("id,user_id,email").eq('email', user.email).maybe_single().execute()
+                    if by_email.data:
+                        admin_row = by_email.data
+                        if admin_row.get('user_id') != uid:
+                            try:
+                                supabase.from_('admins').update({'user_id': uid}).eq('id', admin_row['id']).execute()
+                                logger.info(f"Updated admins.user_id for {user.email} -> {uid}")
+                            except Exception as update_err:
+                                logger.warning(f"Failed to update admins.user_id during auto-heal: {str(update_err)}")
+                        enhanced_user_data = get_enhanced_user_data(uid, user.email)
+                        return {
+                            'uid': uid,
+                            'email': user.email,
+                            'isAdmin': True,
+                            'access_token': response.session.access_token,
+                            'refresh_token': response.session.refresh_token,
+                            'user': enhanced_user_data
+                        }
                     logger.warning(f"User {uid} authenticated but is not an admin.")
                     # Sign out the user as they are not authorized for the admin panel
                     public_supabase.auth.sign_out()
