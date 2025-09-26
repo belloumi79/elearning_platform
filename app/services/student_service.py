@@ -66,9 +66,18 @@ def update_student_profile(student_id: str, data: dict):
 def enroll_student_in_course(student_id: str, course_id: str):
     """
     Enrolls a student in a specific course.
+
+    student_id here is the Supabase Auth user_id. We must map it to the
+    students table primary key before writing to enrollments.
     """
     try:
         supabase = get_supabase_client()
+
+        # Resolve students.id from the authenticated user's user_id
+        student_row = supabase.from_('students').select('id').eq('user_id', student_id).maybe_single().execute()
+        if not student_row.data:
+            raise ValueError("Student profile not found.")
+        student_pk = student_row.data['id']
 
         # 1. Check if the course exists
         course_res = supabase.from_('courses').select('id').eq('id', course_id).maybe_single().execute()
@@ -76,13 +85,20 @@ def enroll_student_in_course(student_id: str, course_id: str):
             raise ValueError("Course not found.")
 
         # 2. Check if the student is already enrolled
-        enrollment_res = supabase.from_('enrollments').select('id').eq('student_id', student_id).eq('course_id', course_id).execute()
+        enrollment_res = (
+            supabase
+            .from_('enrollments')
+            .select('id')
+            .eq('student_id', student_pk)
+            .eq('course_id', course_id)
+            .execute()
+        )
         if enrollment_res.data:
             raise ValueError("Student is already enrolled in this course.")
 
         # 3. Create the new enrollment
         enrollment_data = {
-            'student_id': student_id,
+            'student_id': student_pk,
             'course_id': course_id,
             'enrolled_at': datetime.utcnow().isoformat(),
             'status': 'active'
@@ -100,14 +116,28 @@ def enroll_student_in_course(student_id: str, course_id: str):
 def get_student_courses(student_id: str):
     """
     Retrieves a list of all courses a student is enrolled in.
+
+    student_id here is the Supabase Auth user_id; resolve to students.id.
     """
     try:
         supabase = get_supabase_client()
+        # Resolve students.id
+        student_row = supabase.from_('students').select('id').eq('user_id', student_id).maybe_single().execute()
+        if not student_row.data:
+            return []
+        student_pk = student_row.data['id']
+
         # Select courses by joining through the enrollments table
-        response = supabase.from_('enrollments').select('courses(*)').eq('student_id', student_id).execute()
+        response = (
+            supabase
+            .from_('enrollments')
+            .select('courses(*)')
+            .eq('student_id', student_pk)
+            .execute()
+        )
         
         # The result will be a list of {'courses': {...}} objects. We extract the course details.
-        courses = [item['courses'] for item in response.data if item.get('courses')]
+        courses = [item['courses'] for item in (response.data or []) if item.get('courses')]
         
         return courses
     except Exception as e:
